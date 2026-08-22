@@ -27,7 +27,6 @@ from auth.oauth import (
     build_flow,
     delete_user_credentials,
     get_all_saved_users,
-    get_persistence_mode,
     get_user_email,
     load_credentials,
     refresh_credentials,
@@ -911,17 +910,6 @@ if not st.session_state.authenticated:
 
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        persistence_mode = get_persistence_mode()
-        if persistence_mode == "memory":
-            st.info(
-                "Session tokens are in memory for this deployment. "
-                "They survive reruns while the app stays active and reset after restart."
-            )
-        else:
-            st.info(
-                "Session tokens are persisted on disk in this deployment."
-            )
-
         st.markdown("### 📧 Enter Your Gmail")
         login_email = st.text_input(
             "Gmail Address",
