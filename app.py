@@ -98,6 +98,8 @@ _SESSION_DEFAULTS = {
     "file_deep_report": None,
     "file_cluster_report": None,
     "file_report_metadata": None,
+    "oauth_code_verifier": None,
+    "oauth_state": None,
 }
 
 for key, default in _SESSION_DEFAULTS.items():
@@ -112,11 +114,17 @@ for key, default in _SESSION_DEFAULTS.items():
 def login_button():
     """Render the Google sign-in link button."""
     flow = build_flow()
-    auth_url, _ = flow.authorization_url(
+    auth_url, state = flow.authorization_url(
         access_type="offline",
         include_granted_scopes="true",
         prompt="consent",
     )
+
+    # Persist PKCE/state values so callback token exchange can succeed even
+    # when Streamlit reruns the script between redirect and callback.
+    st.session_state.oauth_code_verifier = getattr(flow, "code_verifier", None)
+    st.session_state.oauth_state = state
+
     st.link_button("🔐 Sign in with Google", auth_url)
 
 
@@ -127,13 +135,23 @@ def handle_callback():
         return
 
     auth_code = params.get("code")
+    callback_state = params.get("state")
     st.query_params.clear()
 
     if st.session_state.authenticated:
         return
 
     try:
+        expected_state = st.session_state.oauth_state
+        if expected_state and callback_state and callback_state != expected_state:
+            raise ValueError("OAuth state mismatch. Please try signing in again.")
+
         flow = build_flow()
+
+        saved_verifier = st.session_state.oauth_code_verifier
+        if saved_verifier:
+            flow.code_verifier = saved_verifier
+
         flow.fetch_token(code=auth_code)
         creds = flow.credentials
 
@@ -144,6 +162,8 @@ def handle_callback():
             st.session_state.current_user = user_email
             st.session_state.authenticated = True
             save_credentials(creds, user_email)
+            st.session_state.oauth_code_verifier = None
+            st.session_state.oauth_state = None
         else:
             raise ValueError(
                 "Unable to retrieve user email. "
@@ -154,6 +174,8 @@ def handle_callback():
         st.session_state.auth_error = f"Authentication failed: {exc}"
         st.session_state.authenticated = False
         st.session_state.creds = None
+        st.session_state.oauth_code_verifier = None
+        st.session_state.oauth_state = None
 
 
 def render_report_clean(report: str):
