@@ -38,7 +38,6 @@ from services.gsc import (
     extract_payload,
     list_properties,
 )
-from services.ga4 import extract_ga4_payload, list_ga4_properties
 from services.report_generator import ReportGenerator
 from services.export import (
     create_word_document,
@@ -111,6 +110,15 @@ for key, default in _SESSION_DEFAULTS.items():
 # ═══════════════════════════════════════════════════════════════════════════════
 #  UI HELPER FUNCTIONS
 # ═══════════════════════════════════════════════════════════════════════════════
+
+def get_ga4_service_functions():
+    """Import GA4 service helpers lazily to avoid startup-time hard failures."""
+    try:
+        from services.ga4 import extract_ga4_payload, list_ga4_properties
+
+        return extract_ga4_payload, list_ga4_properties
+    except Exception as exc:
+        raise RuntimeError(f"Unable to load GA4 service module: {exc}") from exc
 
 def login_button():
     """Render the Google sign-in link button."""
@@ -1071,6 +1079,16 @@ st.divider()
 
 if st.session_state.data_source == "GA":
     st.markdown("### 📈 Google Analytics 4 Analysis")
+
+    try:
+        extract_ga4_payload, list_ga4_properties = get_ga4_service_functions()
+    except RuntimeError as exc:
+        st.error(f"❌ {exc}")
+        st.info(
+            "GA4 dependencies may have failed to load in the current deployment. "
+            "Please check Streamlit Cloud logs and ensure GA4 packages are installed."
+        )
+        st.stop()
 
     with st.spinner("Loading GA4 properties..."):
         ga_properties = list_ga4_properties(creds)
