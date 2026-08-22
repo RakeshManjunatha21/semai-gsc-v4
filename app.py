@@ -100,6 +100,7 @@ _SESSION_DEFAULTS = {
     "file_report_metadata": None,
     "oauth_code_verifier": None,
     "oauth_state": None,
+    "oauth_flow": None,
 }
 
 for key, default in _SESSION_DEFAULTS.items():
@@ -114,6 +115,14 @@ for key, default in _SESSION_DEFAULTS.items():
 def login_button():
     """Render the Google sign-in link button."""
     flow = build_flow()
+
+    # For confidential web clients (client_id + client_secret), avoid PKCE
+    # challenge generation to prevent callback failures when app sessions
+    # restart between auth redirect and token exchange.
+    if hasattr(flow, "autogenerate_code_verifier"):
+        flow.autogenerate_code_verifier = False
+    flow.code_verifier = None
+
     auth_url, state = flow.authorization_url(
         access_type="offline",
         include_granted_scopes="true",
@@ -124,6 +133,7 @@ def login_button():
     # when Streamlit reruns the script between redirect and callback.
     st.session_state.oauth_code_verifier = getattr(flow, "code_verifier", None)
     st.session_state.oauth_state = state
+    st.session_state.oauth_flow = flow
 
     st.link_button("🔐 Sign in with Google", auth_url)
 
@@ -146,7 +156,11 @@ def handle_callback():
         if expected_state and callback_state and callback_state != expected_state:
             raise ValueError("OAuth state mismatch. Please try signing in again.")
 
-        flow = build_flow()
+        flow = st.session_state.oauth_flow or build_flow()
+
+        if hasattr(flow, "autogenerate_code_verifier"):
+            flow.autogenerate_code_verifier = False
+
 
         saved_verifier = st.session_state.oauth_code_verifier
         if saved_verifier:
@@ -164,6 +178,7 @@ def handle_callback():
             save_credentials(creds, user_email)
             st.session_state.oauth_code_verifier = None
             st.session_state.oauth_state = None
+            st.session_state.oauth_flow = None
         else:
             raise ValueError(
                 "Unable to retrieve user email. "
@@ -176,6 +191,7 @@ def handle_callback():
         st.session_state.creds = None
         st.session_state.oauth_code_verifier = None
         st.session_state.oauth_state = None
+        st.session_state.oauth_flow = None
 
 
 def render_report_clean(report: str):
