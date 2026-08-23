@@ -83,6 +83,7 @@ _SESSION_DEFAULTS = {
     "deep_audit_end_date": None,
     "deep_audit_days_diff": None,
     "cluster_audit_report": None,
+    "cluster_audit_payload": None,
     "cluster_audit_site_url": None,
     "cluster_audit_start_date": None,
     "cluster_audit_end_date": None,
@@ -96,6 +97,7 @@ _SESSION_DEFAULTS = {
     "file_deep_report": None,
     "file_cluster_report": None,
     "file_report_metadata": None,
+    "file_source_df": None,
     "oauth_code_verifier": None,
     "oauth_state": None,
     "oauth_flow": None,
@@ -223,6 +225,178 @@ def render_report_clean(report: str):
         i += 1
 
     st.markdown("</div>", unsafe_allow_html=True)
+
+
+def render_gsc_source_data(payload: dict, key_prefix: str):
+    """Render expandable source data for GSC-based outputs."""
+    with st.expander("📂 Source Data (Click to Expand)", expanded=False):
+        if not payload:
+            st.info("No source data available for this report.")
+            return
+
+        st.caption("This report was generated from the source data shown below.")
+        st.download_button(
+            "📥 Download Source JSON",
+            json.dumps(payload, indent=2),
+            f"{key_prefix}_source_{date.today().strftime('%Y%m%d')}.json",
+            mime="application/json",
+            use_container_width=True,
+            key=f"{key_prefix}_source_json_dl",
+        )
+
+        tab1, tab2, tab3 = st.tabs(["Summary", "Top Data", "Raw JSON"])
+
+        with tab1:
+            metrics = payload.get("summary_metrics", {})
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Total Clicks", f"{metrics.get('total_clicks', 0):,}")
+            with col2:
+                st.metric("Total Impressions", f"{metrics.get('total_impressions', 0):,}")
+            with col3:
+                st.metric("Average CTR", f"{metrics.get('avg_ctr', 0):.2%}")
+            with col4:
+                st.metric("Average Position", f"{metrics.get('avg_position', 0):.1f}")
+
+        with tab2:
+            queries_df = pd.DataFrame(payload.get("top_queries_by_impressions", []))
+            pages_df = pd.DataFrame(payload.get("top_pages", []))
+
+            st.markdown("#### Top Queries by Impressions")
+            if not queries_df.empty:
+                st.dataframe(queries_df.head(100), use_container_width=True, height=260)
+            else:
+                st.info("No query source rows available.")
+
+            st.markdown("#### Top Pages by Impressions")
+            if not pages_df.empty:
+                st.dataframe(pages_df.head(100), use_container_width=True, height=260)
+            else:
+                st.info("No page source rows available.")
+
+        with tab3:
+            st.json(payload)
+
+
+def render_ga4_source_data(payload: dict, key_prefix: str):
+    """Render expandable source data for GA4 outputs."""
+    with st.expander("📂 Source Data (Click to Expand)", expanded=False):
+        if not payload:
+            st.info("No GA4 source data available for this report.")
+            return
+
+        st.caption("This report was generated from the GA4 source data shown below.")
+        st.download_button(
+            "📥 Download Source JSON",
+            json.dumps(payload, indent=2),
+            f"{key_prefix}_source_{date.today().strftime('%Y%m%d')}.json",
+            mime="application/json",
+            use_container_width=True,
+            key=f"{key_prefix}_source_json_dl",
+        )
+
+        tab1, tab2, tab3, tab4 = st.tabs([
+            "Summary",
+            "Channels",
+            "Top Pages",
+            "Raw JSON",
+        ])
+
+        with tab1:
+            metrics = payload.get("summary_metrics", {})
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Sessions", f"{metrics.get('total_sessions', 0):,}")
+            with col2:
+                st.metric("Users", f"{metrics.get('total_users', 0):,}")
+            with col3:
+                st.metric("Engagement Rate", f"{metrics.get('engagement_rate', 0):.2%}")
+            with col4:
+                st.metric("Conversions", f"{metrics.get('total_conversions', 0):,}")
+
+            devices_df = pd.DataFrame(payload.get("device_breakdown", []))
+            if not devices_df.empty:
+                st.markdown("#### Device Breakdown")
+                st.dataframe(devices_df, use_container_width=True, height=220)
+
+        with tab2:
+            channels_df = pd.DataFrame(payload.get("channel_performance", []))
+            if not channels_df.empty:
+                st.dataframe(channels_df, use_container_width=True, height=350)
+            else:
+                st.info("No channel source rows available.")
+
+        with tab3:
+            pages_df = pd.DataFrame(payload.get("top_pages", []))
+            if not pages_df.empty:
+                st.dataframe(pages_df, use_container_width=True, height=350)
+            else:
+                st.info("No page source rows available.")
+
+        with tab4:
+            st.json(payload)
+
+
+def render_comparison_source_data(
+    payload1: dict,
+    payload2: dict,
+    comparison_metrics: dict,
+    key_prefix: str,
+):
+    """Render expandable source data for comparison outputs."""
+    with st.expander("📂 Source Data (Click to Expand)", expanded=False):
+        source_data = {
+            "period1": payload1,
+            "period2": payload2,
+            "comparison_metrics": comparison_metrics,
+        }
+
+        st.caption("This comparison report was generated from both period datasets and computed deltas.")
+        st.download_button(
+            "📥 Download Comparison Source JSON",
+            json.dumps(source_data, indent=2),
+            f"{key_prefix}_source_{date.today().strftime('%Y%m%d')}.json",
+            mime="application/json",
+            use_container_width=True,
+            key=f"{key_prefix}_source_json_dl",
+        )
+
+        tab1, tab2, tab3, tab4 = st.tabs([
+            "Period 1",
+            "Period 2",
+            "Computed Metrics",
+            "Raw JSON",
+        ])
+
+        with tab1:
+            st.json(payload1)
+        with tab2:
+            st.json(payload2)
+        with tab3:
+            st.json(comparison_metrics)
+        with tab4:
+            st.json(source_data)
+
+
+def render_file_source_data(df: pd.DataFrame | None, key_prefix: str):
+    """Render expandable source data for file-based outputs."""
+    with st.expander("📂 Source Data (Click to Expand)", expanded=False):
+        if df is None or df.empty:
+            st.info("No processed source rows available for this file report.")
+            return
+
+        st.caption("These reports were generated from the processed uploaded dataset below.")
+        st.dataframe(df.head(200), use_container_width=True, height=360)
+
+        csv_data = df.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            "📥 Download Processed Source CSV",
+            csv_data,
+            f"{key_prefix}_source_{date.today().strftime('%Y%m%d')}.csv",
+            mime="text/csv",
+            use_container_width=True,
+            key=f"{key_prefix}_source_csv_dl",
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1239,6 +1413,7 @@ if st.session_state.data_source == "GA":
 
         st.markdown("")
         render_report_clean(ga_rpt)
+        render_ga4_source_data(ga_pay, "ga4")
 
         st.markdown("")
 
@@ -1655,6 +1830,7 @@ if st.session_state.deep_audit_report:
         """, unsafe_allow_html=True)
 
         render_report_clean(da_report)
+        render_gsc_source_data(st.session_state.deep_audit_payload or {}, "deep_audit")
 
         st.markdown("")
 
@@ -1720,6 +1896,7 @@ if st.session_state.deep_audit_report:
             """, unsafe_allow_html=True)
 
             render_report_clean(st.session_state.action_report)
+            render_gsc_source_data(st.session_state.deep_audit_payload or {}, "action_report")
 
             st.markdown("")
 
@@ -1792,6 +1969,7 @@ if cluster_audit_btn:
         report = report_gen.generate_cluster_audit(payload)
 
     st.session_state.cluster_audit_report = report
+    st.session_state.cluster_audit_payload = payload
     st.session_state.cluster_audit_site_url = site_url
     st.session_state.cluster_audit_start_date = start_date
     st.session_state.cluster_audit_end_date = end_date
@@ -1833,6 +2011,7 @@ if st.session_state.cluster_audit_report:
     """, unsafe_allow_html=True)
 
     render_report_clean(ca_report)
+    render_gsc_source_data(st.session_state.cluster_audit_payload or {}, "cluster_audit")
 
     st.markdown("")
 
@@ -1874,6 +2053,7 @@ if st.session_state.cluster_audit_report:
     st.markdown("")
     if st.button("🗑️ Clear Cluster Report & Start New Analysis", use_container_width=False, key="clear_cluster_report"):
         st.session_state.cluster_audit_report = None
+        st.session_state.cluster_audit_payload = None
         st.session_state.cluster_audit_site_url = None
         st.session_state.cluster_audit_start_date = None
         st.session_state.cluster_audit_end_date = None
@@ -1909,6 +2089,7 @@ if file_analytics_btn:
             "num_rows": len(combined_df),
             "generated_date": date.today(),
         }
+        st.session_state.file_source_df = combined_df
 
 # Display file reports if available
 if st.session_state.file_deep_report and st.session_state.file_cluster_report:
@@ -1940,11 +2121,13 @@ if st.session_state.file_deep_report and st.session_state.file_cluster_report:
         </div>
     </div>
     """, unsafe_allow_html=True)
+    render_file_source_data(st.session_state.file_source_df, "file_reports")
 
     if st.button("🗑️ Clear Reports and Upload New Files", use_container_width=False):
         st.session_state.file_deep_report = None
         st.session_state.file_cluster_report = None
         st.session_state.file_report_metadata = None
+        st.session_state.file_source_df = None
         st.rerun()
 
     tab1, tab2 = st.tabs(["🔍 Deep Audit Report", "📊 Cluster Audit Report"])
@@ -2144,6 +2327,7 @@ if comparison_btn:
 
     st.markdown("")
     render_report_clean(report)
+    render_comparison_source_data(payload1, payload2, comp_metrics, "comparison")
 
     st.markdown("")
 
