@@ -287,21 +287,14 @@ BEGIN COMPARISON REPORT:
         ).get("errors", {})
         api_funnel_rows = datasets.get("api_funnel_report", [])
         bigquery_funnel_rows = datasets.get("bq_ordered_funnel", [])
-        uploaded_path_rows = datasets.get("uploaded_path_exploration", [])
-        uploaded_funnel_rows = datasets.get(
-            "uploaded_funnel_exploration", []
-        )
         api_funnel_error = extraction_errors.get("api_funnel_report")
         funnel_dataset = (
-            "datasets.uploaded_funnel_exploration"
-            if uploaded_funnel_rows
-            else
             "datasets.api_funnel_report"
             if api_funnel_rows or not bigquery_funnel_rows
             else "datasets.bq_ordered_funnel"
         )
         funnel_rows_present = bool(
-            uploaded_funnel_rows or api_funnel_rows or bigquery_funnel_rows
+            api_funnel_rows or bigquery_funnel_rows
         )
         key_event_configuration = model_payload.get(
             "key_event_configuration", {}
@@ -348,20 +341,9 @@ BEGIN COMPARISON REPORT:
                 "sequential": False,
             },
             "input_12_path_exploration_equivalent": {
-                "dataset": (
-                    "datasets.uploaded_path_exploration"
-                    if uploaded_path_rows
-                    else "datasets.bq_form_start_paths"
-                ),
-                "present": bool(
-                    uploaded_path_rows
-                    or datasets.get("bq_form_start_paths")
-                ),
-                "scope": (
-                    "uploaded GA4 Path Exploration output"
-                    if uploaded_path_rows
-                    else "same-session BigQuery path context"
-                ),
+                "dataset": "datasets.bq_form_start_paths",
+                "present": bool(datasets.get("bq_form_start_paths")),
+                "scope": "same-session BigQuery path context",
                 "authoritative_for_funnel_rates": False,
                 "adjacent_action_dataset": (
                     "datasets.api_funnel_next_actions"
@@ -374,14 +356,12 @@ BEGIN COMPARISON REPORT:
                     "step, not a complete Path Exploration graph."
                 ),
                 "extraction_status": (
-                    "available" if uploaded_path_rows
-                    or datasets.get("bq_form_start_paths")
+                    "available" if datasets.get("bq_form_start_paths")
                     else bigquery_extraction.get("status", "unavailable")
                 ),
                 "unavailable_reason": (
                     bigquery_extraction.get("message")
-                    if not uploaded_path_rows
-                    and not datasets.get("bq_form_start_paths")
+                    if not datasets.get("bq_form_start_paths")
                     else None
                 ),
             },
@@ -389,9 +369,7 @@ BEGIN COMPARISON REPORT:
                 "dataset": funnel_dataset,
                 "present": funnel_rows_present,
                 "scope": (
-                    "uploaded GA4 Funnel Exploration output"
-                    if uploaded_funnel_rows
-                    else "closed user funnel from GA4 Data API v1alpha"
+                    "closed user funnel from GA4 Data API v1alpha"
                     if api_funnel_rows or not bigquery_funnel_rows
                     else "same-session timestamp-ordered BigQuery funnel"
                 ),

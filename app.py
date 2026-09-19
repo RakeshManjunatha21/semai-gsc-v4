@@ -41,7 +41,6 @@ from services.report_generator import ReportGenerator
 from services.export import (
     create_ga4_excel_export,
     create_word_document,
-    parse_markdown_table,
     process_uploaded_files,
     process_direct_files,
     DOCX_AVAILABLE,
@@ -121,13 +120,6 @@ def get_ga4_service_functions():
         return extract_ga4_payload, list_ga4_properties
     except Exception as exc:
         raise RuntimeError(f"Unable to load GA4 service module: {exc}") from exc
-
-
-def parse_ga4_exploration_upload(uploaded_file) -> list[dict]:
-    """Convert a GA4 Explore CSV upload into JSON-safe row dictionaries."""
-    dataframe = pd.read_csv(uploaded_file, encoding="utf-8-sig")
-    dataframe.columns = [str(column).strip() for column in dataframe.columns]
-    return json.loads(dataframe.to_json(orient="records", date_format="iso"))
 
 
 def login_button():
@@ -217,40 +209,19 @@ def render_report_clean(
     container_key: str | None = None,
     skip_first_h1: bool = False,
 ):
-    """Render a markdown report with custom table handling."""
+    """Render a complete Markdown report in one stable document block."""
     report_container = st.container(key=container_key) if container_key else st
 
     with report_container:
-        st.markdown('<div class="report-container">', unsafe_allow_html=True)
-
-        lines = report.split("\n")
-        i = 0
-        first_h1_skipped = False
-
-        while i < len(lines):
-            line = lines[i]
-
-            if (
-                skip_first_h1
-                and not first_h1_skipped
-                and line.lstrip().startswith("# ")
-            ):
-                first_h1_skipped = True
-                i += 1
-                continue
-
-            # Detect markdown tables
-            if "|" in line and i + 1 < len(lines) and "|" in lines[i + 1]:
-                table_html, new_idx = parse_markdown_table(lines, i)
-                if table_html:
-                    st.markdown(table_html, unsafe_allow_html=True)
-                    i = new_idx
-                    continue
-
-            st.markdown(line)
-            i += 1
-
-        st.markdown("</div>", unsafe_allow_html=True)
+        lines = report.splitlines()
+        if skip_first_h1:
+            first_h1_index = next((
+                index for index, line in enumerate(lines)
+                if line.lstrip().startswith("# ")
+            ), None)
+            if first_h1_index is not None:
+                del lines[first_h1_index]
+        st.markdown("\n".join(lines))
 
 
 def render_gsc_source_data(payload: dict, key_prefix: str):
@@ -2257,29 +2228,6 @@ if st.session_state.data_source == "GA":
         f"**{ga_end_date.strftime('%B %d, %Y')}**"
     )
 
-    st.markdown("### Exploration Evidence")
-    path_upload_col, funnel_upload_col = st.columns(2)
-    with path_upload_col:
-        ga_path_exploration_file = st.file_uploader(
-            "Path Exploration CSV",
-            type=["csv"],
-            help=(
-                "Optional. Export the Path Exploration from GA4 Explore as "
-                "CSV to include its complete historical output."
-            ),
-            key="ga_path_exploration_file",
-        )
-    with funnel_upload_col:
-        ga_funnel_exploration_file = st.file_uploader(
-            "Funnel Exploration CSV",
-            type=["csv"],
-            help=(
-                "Optional. Upload an exact GA4 Explore funnel definition; "
-                "otherwise the standard funnel is collected automatically."
-            ),
-            key="ga_funnel_exploration_file",
-        )
-
     st.markdown("")
 
     ga_report_btn = st.button(
@@ -2397,44 +2345,6 @@ if st.session_state.data_source == "GA":
                 "status": "error",
                 "message": str(exc),
             }
-
-        exploration_uploads = {}
-        for dataset_name, uploaded_file in [
-            ("uploaded_path_exploration", ga_path_exploration_file),
-            ("uploaded_funnel_exploration", ga_funnel_exploration_file),
-        ]:
-            if uploaded_file is None:
-                continue
-            try:
-                uploaded_rows = parse_ga4_exploration_upload(uploaded_file)
-            except Exception as exc:
-                st.error(
-                    f"Unable to read {uploaded_file.name}: {exc}"
-                )
-                st.stop()
-            ga_payload.setdefault("datasets", {})[dataset_name] = uploaded_rows
-            extraction_metadata = ga_payload.setdefault(
-                "extraction_metadata", {}
-            )
-            extraction_metadata.setdefault(
-                "dataset_row_counts", {}
-            )[dataset_name] = {
-                "api_row_count": len(uploaded_rows),
-                "extracted_row_count": len(uploaded_rows),
-                "complete": True,
-            }
-            extraction_metadata.setdefault(
-                "report_quality", {}
-            )[dataset_name] = {
-                "source": "GA4 Explore CSV upload",
-                "sampling_metadatas": [],
-            }
-            exploration_uploads[dataset_name] = {
-                "file_name": uploaded_file.name,
-                "row_count": len(uploaded_rows),
-                "status": "available" if uploaded_rows else "empty",
-            }
-        ga_payload["exploration_uploads"] = exploration_uploads
 
         # Check for empty GA4 data (all summary metrics are zero)
         ga_summary = ga_payload.get("summary_metrics", {})
