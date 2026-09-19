@@ -1006,6 +1006,287 @@ st.markdown("""
         margin-bottom: 1rem;
     }
 
+    /* Authentication experience */
+    .auth-brand {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.25rem 0 1.5rem;
+        border-bottom: 1px solid #DCE3EA;
+    }
+
+    .auth-brand-mark {
+        display: grid;
+        place-items: center;
+        width: 2.35rem;
+        height: 2.35rem;
+        background: #172033;
+        color: #FFFFFF;
+        border-radius: 5px;
+        font-family: Georgia, 'Times New Roman', serif;
+        font-size: 1.25rem;
+        font-weight: 700;
+    }
+
+    .auth-brand-name {
+        color: #172033;
+        font-size: 0.9rem;
+        font-weight: 800;
+    }
+
+    .auth-brand-product {
+        color: #64748B;
+        font-size: 0.78rem;
+        margin-top: 0.05rem;
+    }
+
+    .st-key-auth-screen {
+        position: relative;
+        min-height: 610px;
+        display: flex;
+        align-items: center;
+        padding: 3.5rem 0 4rem;
+    }
+
+    .st-key-auth-screen::before {
+        content: "";
+        position: absolute;
+        inset: 1.5rem -2.5rem 0;
+        z-index: 0;
+        background-color: #F8FAFC;
+        background-image:
+            linear-gradient(#E8EDF3 1px, transparent 1px),
+            linear-gradient(90deg, #E8EDF3 1px, transparent 1px);
+        background-size: 40px 40px;
+        mask-image: linear-gradient(to right, rgba(0,0,0,0.55), transparent 62%);
+        pointer-events: none;
+    }
+
+    .st-key-auth-screen > div {
+        position: relative;
+        z-index: 1;
+        width: 100%;
+    }
+
+    .auth-intro {
+        max-width: 650px;
+        padding: 1rem 2rem 1rem 0;
+    }
+
+    .auth-eyebrow,
+    .auth-panel-kicker {
+        color: #2563EB;
+        font-size: 0.72rem;
+        font-weight: 800;
+        margin-bottom: 0.85rem;
+    }
+
+    .auth-intro h1 {
+        max-width: 620px;
+        color: #111827;
+        font-family: Georgia, 'Times New Roman', serif;
+        font-size: 3.25rem;
+        font-weight: 700;
+        line-height: 1.08;
+        margin: 0;
+        padding: 0;
+        border: 0;
+    }
+
+    .auth-intro > p {
+        max-width: 590px;
+        color: #526075;
+        font-size: 1.05rem;
+        line-height: 1.7;
+        margin: 1.25rem 0 2rem;
+    }
+
+    .auth-capabilities {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 0;
+        border-top: 1px solid #CBD5E1;
+    }
+
+    .auth-capabilities > div {
+        display: grid;
+        align-content: start;
+        min-width: 0;
+        padding: 1.2rem 1rem 0 0;
+    }
+
+    .auth-capabilities span {
+        color: #2563EB;
+        font-family: Georgia, 'Times New Roman', serif;
+        font-size: 0.8rem;
+        font-weight: 700;
+        margin-bottom: 0.65rem;
+    }
+
+    .auth-capabilities strong {
+        color: #172033;
+        font-size: 0.88rem;
+        line-height: 1.35;
+    }
+
+    .auth-capabilities small {
+        color: #64748B;
+        font-size: 0.76rem;
+        line-height: 1.45;
+        margin-top: 0.25rem;
+    }
+
+    .st-key-auth-panel {
+        background: #FFFFFF;
+        border: 1px solid #D5DDE7;
+        border-top: 4px solid #2563EB;
+        border-radius: 6px;
+        padding: 2.2rem;
+        box-shadow: 0 18px 45px rgba(23, 32, 51, 0.10);
+    }
+
+    .auth-panel-heading {
+        margin-bottom: 1.5rem;
+    }
+
+    .auth-panel-heading h2 {
+        color: #172033;
+        font-family: Georgia, 'Times New Roman', serif;
+        font-size: 1.8rem;
+        line-height: 1.2;
+        margin: 0;
+        padding: 0;
+        border: 0;
+    }
+
+    .auth-panel-heading p {
+        color: #64748B;
+        font-size: 0.9rem;
+        line-height: 1.55;
+        margin: 0.65rem 0 0;
+    }
+
+    .auth-field-label {
+        color: #334155;
+        font-size: 0.82rem;
+        font-weight: 700;
+        margin: 0 0 0.45rem;
+    }
+
+    .st-key-auth-panel .stButton > button,
+    .st-key-auth-panel .stLinkButton > a {
+        width: 100%;
+        min-height: 3rem;
+    }
+
+    .st-key-auth-panel .stLinkButton > a {
+        justify-content: center;
+        background: #2563EB !important;
+        color: #FFFFFF !important;
+        border-color: #2563EB !important;
+    }
+
+    .st-key-auth-panel .stLinkButton > a:hover {
+        background: #1D4ED8 !important;
+        color: #FFFFFF !important;
+        border-color: #1D4ED8 !important;
+    }
+
+    .auth-divider {
+        display: flex;
+        align-items: center;
+        gap: 0.8rem;
+        color: #94A3B8;
+        font-size: 0.75rem;
+        margin: 1.2rem 0;
+    }
+
+    .auth-divider::before,
+    .auth-divider::after {
+        content: "";
+        flex: 1;
+        height: 1px;
+        background: #E2E8F0;
+    }
+
+    .auth-privacy {
+        color: #7C899B;
+        font-size: 0.75rem;
+        line-height: 1.5;
+        text-align: center;
+        margin: 1rem 0 0;
+    }
+
+    @media (max-width: 900px) {
+        .st-key-auth-screen {
+            min-height: auto;
+            padding: 2.25rem 0 3rem;
+        }
+
+        .st-key-auth-screen [data-testid="stHorizontalBlock"] {
+            flex-direction: column;
+            gap: 1.75rem;
+        }
+
+        .st-key-auth-screen [data-testid="column"] {
+            width: 100% !important;
+            flex: 1 1 auto !important;
+        }
+
+        .auth-intro {
+            max-width: 100%;
+            padding-right: 0;
+        }
+
+        .auth-intro h1 {
+            font-size: 2.5rem;
+        }
+
+        .st-key-auth-panel {
+            max-width: none;
+        }
+    }
+
+    @media (max-width: 560px) {
+        .block-container {
+            padding: 1.25rem 1rem !important;
+        }
+
+        .auth-brand {
+            padding-bottom: 1rem;
+        }
+
+        .st-key-auth-screen {
+            padding-top: 1.75rem;
+        }
+
+        .auth-intro h1 {
+            font-size: 2.15rem;
+        }
+
+        .auth-intro > p {
+            font-size: 0.96rem;
+            margin-bottom: 1.4rem;
+        }
+
+        .auth-capabilities {
+            grid-template-columns: 1fr;
+        }
+
+        .auth-capabilities > div {
+            grid-template-columns: 2rem 1fr;
+            padding-top: 0.85rem;
+        }
+
+        .auth-capabilities span {
+            grid-row: 1 / span 2;
+        }
+
+        .st-key-auth-panel {
+            padding: 1.5rem 1.25rem;
+        }
+    }
+
     [data-testid="stSidebar"] {
         background: #172033;
         border-right: 1px solid #293449;
@@ -1670,73 +1951,96 @@ if not st.session_state.authenticated:
     saved_users = get_all_saved_users()
 
     st.markdown("""
-    <div class="app-header">
-        <h1 class="app-title">Analytics Intelligence Platform</h1>
-        <p class="app-subtitle">Advanced SEO, GEO & AEO Analytics Powered by SEMAI</p>
-    </div>
+    <header class="auth-brand">
+        <div class="auth-brand-mark">S</div>
+        <div>
+            <div class="auth-brand-name">SEMAI</div>
+            <div class="auth-brand-product">Analytics Intelligence</div>
+        </div>
+    </header>
     """, unsafe_allow_html=True)
 
-    st.markdown('<div class="login-container">', unsafe_allow_html=True)
-    st.markdown('<h2 class="login-title">Welcome</h2>', unsafe_allow_html=True)
-    st.markdown(
-        '<p class="login-subtitle">Sign in with your Google account to access Analytics Intelligence</p>',
-        unsafe_allow_html=True,
-    )
-    st.markdown("</div>", unsafe_allow_html=True)
+    with st.container(key="auth-screen"):
+        intro_col, access_col = st.columns([1.15, 0.85], gap="large")
 
-    if st.session_state.auth_error:
-        st.error(st.session_state.auth_error)
-        st.info("Please sign in again to continue.")
-        st.session_state.auth_error = None
+        with intro_col:
+            st.markdown("""
+            <section class="auth-intro">
+                <div class="auth-eyebrow">DECISIONS, BACKED BY EVIDENCE</div>
+                <h1>See what your analytics are really saying.</h1>
+                <p>Bring Search Console and GA4 into one rigorous audit workflow, built for clear priorities and defensible action.</p>
+                <div class="auth-capabilities">
+                    <div><span>01</span><strong>Complete extraction</strong><small>Paginated data with quality checks</small></div>
+                    <div><span>02</span><strong>Forensic analysis</strong><small>SEO, GEO, AEO, and conversion evidence</small></div>
+                    <div><span>03</span><strong>Action-ready reporting</strong><small>Prioritized findings with transparent limits</small></div>
+                </div>
+            </section>
+            """, unsafe_allow_html=True)
 
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        if ENABLE_TOKEN_PERSISTENCE:
-            st.markdown("### Enter Your Gmail")
-            login_email = st.text_input(
-                "Gmail Address",
-                placeholder="your.email@gmail.com",
-                key="login_email_input",
-                label_visibility="collapsed",
-            )
+        with access_col:
+            with st.container(key="auth-panel"):
+                st.markdown("""
+                <div class="auth-panel-heading">
+                    <div class="auth-panel-kicker">SECURE ACCESS</div>
+                    <h2>Welcome back</h2>
+                    <p>Continue with the Google account connected to your analytics properties.</p>
+                </div>
+                """, unsafe_allow_html=True)
 
-            if st.button("Sign In", use_container_width=True, type="primary"):
-                if login_email:
-                    login_email = login_email.strip().lower()
-                    if login_email in [u.lower() for u in saved_users]:
-                        matched_user = next(
-                            (u for u in saved_users if u.lower() == login_email), None
-                        )
-                        if matched_user:
-                            creds = load_credentials(matched_user)
-                            if creds:
-                                if creds.valid:
-                                    st.session_state.creds = creds
-                                    st.session_state.current_user = matched_user
-                                    st.session_state.authenticated = True
-                                    st.rerun()
-                                elif creds.expired and creds.refresh_token:
-                                    refreshed_creds = refresh_credentials(creds, matched_user)
-                                    if refreshed_creds:
-                                        st.session_state.creds = refreshed_creds
-                                        st.session_state.current_user = matched_user
-                                        st.session_state.authenticated = True
-                                        st.rerun()
+                if st.session_state.auth_error:
+                    st.error(st.session_state.auth_error)
+                    st.info("Please sign in again to continue.")
+                    st.session_state.auth_error = None
+
+                if ENABLE_TOKEN_PERSISTENCE:
+                    st.markdown('<div class="auth-field-label">Saved account</div>', unsafe_allow_html=True)
+                    login_email = st.text_input(
+                        "Gmail Address",
+                        placeholder="name@company.com",
+                        key="login_email_input",
+                        label_visibility="collapsed",
+                    )
+
+                    if st.button("Continue with saved session", use_container_width=True, type="primary"):
+                        if login_email:
+                            login_email = login_email.strip().lower()
+                            if login_email in [u.lower() for u in saved_users]:
+                                matched_user = next(
+                                    (u for u in saved_users if u.lower() == login_email), None
+                                )
+                                if matched_user:
+                                    creds = load_credentials(matched_user)
+                                    if creds:
+                                        if creds.valid:
+                                            st.session_state.creds = creds
+                                            st.session_state.current_user = matched_user
+                                            st.session_state.authenticated = True
+                                            st.rerun()
+                                        elif creds.expired and creds.refresh_token:
+                                            refreshed_creds = refresh_credentials(creds, matched_user)
+                                            if refreshed_creds:
+                                                st.session_state.creds = refreshed_creds
+                                                st.session_state.current_user = matched_user
+                                                st.session_state.authenticated = True
+                                                st.rerun()
+                                            else:
+                                                st.error("Session expired. Please sign in with Google again.")
+                                                st.session_state.auth_error = "Session expired for this account."
+                                        else:
+                                            st.error("Session expired. Please sign in with Google again.")
                                     else:
-                                        st.error("Session expired. Please sign in with Google again.")
-                                        st.session_state.auth_error = "Session expired for this account."
+                                        st.error("Failed to load credentials. Please sign in with Google.")
                                 else:
-                                    st.error("Session expired. Please sign in with Google again.")
-                            else:
-                                st.error("Failed to load credentials. Please sign in with Google.")
+                                    st.warning("No saved session found for this email. Please sign in with Google first.")
                         else:
-                            st.warning("No saved session found for this email. Please sign in with Google first.")
-                else:
-                    st.warning("Please enter your Gmail address.")
+                            st.warning("Please enter your Gmail address.")
 
-            st.divider()
-            st.markdown("##### First-time access")
-        login_button()
+                    st.markdown('<div class="auth-divider"><span>or</span></div>', unsafe_allow_html=True)
+
+                login_button()
+                st.markdown("""
+                <p class="auth-privacy">Google OAuth provides secure, account-scoped access to your analytics data.</p>
+                """, unsafe_allow_html=True)
 
     st.stop()
 
