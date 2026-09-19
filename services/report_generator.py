@@ -218,8 +218,6 @@ BEGIN COMPARISON REPORT:
             "countries": "datasets.countries",
         }
         datasets = model_payload.get("datasets", {})
-        gsc_context = model_payload.get("gsc_context", {})
-        gsc_extraction = model_payload.get("gsc_extraction", {})
         prior_period = model_payload.get("prior_period", {})
         prior_summary = prior_period.get("summary_metrics", {})
         prior_period_present = bool(prior_summary) and any(
@@ -243,6 +241,10 @@ BEGIN COMPARISON REPORT:
         configured_key_events = key_event_configuration.get(
             "configured_names", []
         )
+        model_payload["analysis_scope"] = {
+            "type": "ga4_only",
+            "excluded_sources": ["Google Search Console"],
+        }
         model_payload["analysis_input_manifest"] = {
             "ga4_key_event_configuration": {
                 "status": (
@@ -259,26 +261,18 @@ BEGIN COMPARISON REPORT:
                 "error": key_event_configuration.get("error"),
             },
             "input_1_gsc_queries": {
-                "dataset": "gsc_context.top_queries_by_impressions",
-                "present": bool(
-                    gsc_context.get("top_queries_by_impressions")
+                "present": False,
+                "extraction_status": "not_applicable",
+                "unavailable_reason": (
+                    "Google Search Console is outside this GA4-only report."
                 ),
-                "row_count": len(
-                    gsc_context.get("top_queries_by_impressions", [])
-                ),
-                "extraction_status": gsc_extraction.get(
-                    "status", "not_selected"
-                ),
-                "unavailable_reason": gsc_extraction.get("message"),
             },
             "input_2_gsc_landing_pages": {
-                "dataset": "gsc_context.top_pages",
-                "present": bool(gsc_context.get("top_pages")),
-                "row_count": len(gsc_context.get("top_pages", [])),
-                "extraction_status": gsc_extraction.get(
-                    "status", "not_selected"
+                "present": False,
+                "extraction_status": "not_applicable",
+                "unavailable_reason": (
+                    "Google Search Console is outside this GA4-only report."
                 ),
-                "unavailable_reason": gsc_extraction.get("message"),
             },
             "input_7_events_report": {
                 "dataset": "datasets.events",
@@ -396,6 +390,14 @@ Otherwise, generate all sections of the GA4 Deep Audit Report following the temp
 Include a country-wise performance analysis using datasets.countries, covering
 traffic, engagement, key events, and revenue without inventing unavailable values.
 
+GA4-ONLY SCOPE:
+This report must use GA4 and its linked BigQuery event export only. Do not
+request, analyze, recommend supplying, or create findings from Google Search
+Console. Omit inputs 1 and 2 from the input-validation table because they are
+outside this report's scope. Never label them Absent or Blocked. Omit
+branded/non-branded CTR, search-query clustering, ranking, and
+organic-impression conclusions.
+
 STATUS TERMINOLOGY:
 "Blocked" means a requested conclusion cannot be computed from the evidence
 supplied in this run. It does not mean Google blocked the API request unless
@@ -408,6 +410,12 @@ Blocked label must include one of these causes and the concrete reason:
 - External evidence required: the conclusion needs CRM, revenue, target, or
     manually exported attribution evidence outside the available APIs.
 - API/permission error: only when the extraction status explicitly says error.
+In the input-validation table, use Available, Not available: <exact reason>,
+or Not applicable. Never use the bare status Absent. For inputs 12 and 13,
+state that the app uses the named BigQuery equivalent and include its
+unavailable reason. For input 15, state whether the automatic equal-length
+previous-period extraction returned data. For input 16, report the linked
+BigQuery export status and row counts.
 Use an available BigQuery ordered funnel as the input 13 equivalent and an
 available BigQuery event export as input 16. Do not call either absent when its
 manifest entry says present.

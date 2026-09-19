@@ -2206,44 +2206,15 @@ if st.session_state.data_source == "GA":
     )
     ga_property_id = property_map.get(selected_ga_property)
 
-    try:
-        ga_gsc_properties = list_properties(creds)
-    except Exception:
-        ga_gsc_properties = []
-
-    evidence_col1, evidence_col2 = st.columns(2)
-    with evidence_col1:
-        gsc_evidence_options = ["Do not include"] + ga_gsc_properties
-        default_gsc_index = next(
-            (
-                index
-                for index, site_url in enumerate(
-                    gsc_evidence_options
-                )
-                if site_url.startswith("sc-domain:")
-            ),
-            1 if ga_gsc_properties else 0,
-        )
-        selected_ga_gsc_property = st.selectbox(
-            "Search Console evidence",
-            gsc_evidence_options,
-            index=default_gsc_index,
-            help=(
-                "Adds organic queries and landing-page evidence to the GA4 "
-                "audit. Choose the property that belongs to this GA4 site."
-            ),
-            key="ga_gsc_property_selector",
-        )
-    with evidence_col2:
-        include_ga_prior_period = st.toggle(
-            "Include previous-period benchmark",
-            value=True,
-            help=(
-                "Fetches the immediately preceding date range of equal "
-                "length for defensible trend comparisons."
-            ),
-            key="ga_include_prior_period",
-        )
+    include_ga_prior_period = st.toggle(
+        "Include previous-period benchmark",
+        value=True,
+        help=(
+            "Fetches the immediately preceding date range of equal length "
+            "for defensible GA4 trend comparisons."
+        ),
+        key="ga_include_prior_period",
+    )
 
     st.markdown("### Select Date Range")
     col_date1, col_date2 = st.columns(2)
@@ -2297,40 +2268,6 @@ if st.session_state.data_source == "GA":
         if "error" in ga_payload:
             st.error(f"Error fetching GA4 data: {ga_payload.get('error')}")
             st.stop()
-
-        if selected_ga_gsc_property != "Do not include":
-            try:
-                gsc_context = extract_payload(
-                    creds,
-                    selected_ga_gsc_property,
-                    ga_start_date,
-                    ga_end_date,
-                )
-                if gsc_context.get("summary_metrics"):
-                    ga_payload["gsc_context"] = gsc_context
-                    ga_payload["gsc_extraction"] = {
-                        "status": "available",
-                        "property": selected_ga_gsc_property,
-                    }
-                else:
-                    ga_payload["gsc_extraction"] = {
-                        "status": "unavailable",
-                        "property": selected_ga_gsc_property,
-                        "message": gsc_context.get(
-                            "note", "No Search Console rows were returned."
-                        ),
-                    }
-            except Exception as exc:
-                ga_payload["gsc_extraction"] = {
-                    "status": "error",
-                    "property": selected_ga_gsc_property,
-                    "message": str(exc),
-                }
-        else:
-            ga_payload["gsc_extraction"] = {
-                "status": "not_selected",
-                "message": "No Search Console property was selected.",
-            }
 
         if include_ga_prior_period:
             prior_end_date = ga_start_date - timedelta(days=1)
