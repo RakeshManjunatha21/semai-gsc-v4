@@ -53,7 +53,7 @@ from services.export import (
 MODEL = configure_model()
 if not GEMINI_API_KEY:
     st.error(
-        "⚠️ Gemini API key not found. "
+        "Gemini API key not found. "
         "Set GOOGLE_GEMINI_KEY or GEMINI_API_KEY via environment variables "
         "or Streamlit Secrets."
     )
@@ -145,7 +145,7 @@ def login_button():
     st.session_state.oauth_state = state
     st.session_state.oauth_flow = flow
 
-    st.link_button("🔐 Sign in with Google", auth_url)
+    st.link_button("Sign in with Google", auth_url)
 
 
 def handle_callback():
@@ -544,7 +544,7 @@ def render_file_source_data(df: pd.DataFrame | None, key_prefix: str):
 
 st.set_page_config(
     page_title="Analytics Intelligence Platform - SEMAI",
-    page_icon="📊",
+    page_icon="S",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -928,7 +928,213 @@ st.markdown("""
     }
 
     .block-container > div {
-        animation: fadeIn 0.5s ease-out;
+        animation: none;
+    }
+
+    /* Professional UI overrides */
+    :root {
+        --primary: #1D4ED8;
+        --primary-dark: #1E40AF;
+        --secondary: #475569;
+        --success: #166534;
+        --danger: #B91C1C;
+        --dark: #172033;
+        --light: #F8FAFC;
+        --border: #D9E0E8;
+    }
+
+    .main,
+    [data-testid="stAppViewContainer"] {
+        background: #F4F6F8;
+    }
+
+    .block-container {
+        max-width: 1280px;
+        padding: 2rem 2.5rem !important;
+        margin: 0 auto;
+        background: #FFFFFF;
+        border-radius: 0;
+        box-shadow: none;
+    }
+
+    .app-header {
+        background: #FFFFFF;
+        padding: 1rem 0 1.5rem;
+        margin-bottom: 1.5rem;
+        text-align: left;
+        border: 0;
+        border-bottom: 1px solid var(--border);
+        border-radius: 0;
+        box-shadow: none;
+    }
+
+    .app-title {
+        color: var(--dark);
+        font-size: 2rem;
+        font-weight: 700;
+        text-shadow: none;
+        letter-spacing: 0;
+    }
+
+    .app-subtitle {
+        color: #64748B;
+        font-size: 0.95rem;
+        margin-top: 0.35rem;
+    }
+
+    .login-container {
+        background: #FFFFFF;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 2rem;
+        margin: 1.5rem 0;
+        box-shadow: none;
+    }
+
+    .login-title {
+        color: var(--dark);
+        font-size: 1.5rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .login-subtitle {
+        color: #64748B;
+        font-size: 0.95rem;
+        margin-bottom: 1rem;
+    }
+
+    [data-testid="stSidebar"] {
+        background: #172033;
+        border-right: 1px solid #293449;
+    }
+
+    [data-testid="stSidebar"] .stButton > button {
+        background: transparent !important;
+        color: #E2E8F0 !important;
+        border-color: #475569 !important;
+    }
+
+    [data-testid="stSidebar"] .stButton > button:hover {
+        background: #253047 !important;
+        border-color: #64748B !important;
+    }
+
+    .stButton > button,
+    .stDownloadButton > button,
+    .stLinkButton > a {
+        min-height: 2.65rem;
+        background: #FFFFFF !important;
+        color: #243047 !important;
+        border: 1px solid #CBD5E1 !important;
+        border-radius: 5px !important;
+        padding: 0.6rem 1rem !important;
+        font-size: 0.95rem !important;
+        font-weight: 600 !important;
+        box-shadow: none !important;
+        transition: border-color 120ms ease, background 120ms ease !important;
+    }
+
+    .stButton > button[kind="primary"] {
+        background: var(--primary) !important;
+        color: #FFFFFF !important;
+        border-color: var(--primary) !important;
+    }
+
+    .stButton > button:hover,
+    .stDownloadButton > button:hover,
+    .stLinkButton > a:hover {
+        background: #F8FAFC !important;
+        color: #172033 !important;
+        border-color: #94A3B8 !important;
+        transform: none !important;
+        box-shadow: none !important;
+    }
+
+    .stButton > button[kind="primary"]:hover {
+        background: var(--primary-dark) !important;
+        color: #FFFFFF !important;
+        border-color: var(--primary-dark) !important;
+    }
+
+    .report-container {
+        padding: 0;
+        border-radius: 0;
+        line-height: 1.65;
+    }
+
+    .report-container h1,
+    .report-container h2 {
+        color: var(--dark);
+        border-bottom: 1px solid var(--border);
+    }
+
+    .report-container h1 { font-size: 1.75rem; border-bottom-width: 1px; }
+    .report-container h2 { font-size: 1.45rem; border-bottom-width: 1px; }
+    .report-container h3 {
+        color: #243047;
+        font-size: 1.2rem;
+        border-left: 3px solid var(--primary);
+    }
+    .report-container h4 { color: #334155; }
+    .report-container strong { color: #172033; }
+    .report-container em { color: #475569; }
+
+    .report-container table,
+    .markdown-table {
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        box-shadow: none;
+    }
+
+    .report-container th,
+    .markdown-table th,
+    .markdown-table thead {
+        background: #243047;
+        color: #FFFFFF;
+    }
+
+    .metric-card,
+    .report-container blockquote,
+    .report-container > p:first-of-type {
+        background: #F8FAFC;
+        color: #243047;
+        border: 1px solid var(--border);
+        border-radius: 5px;
+        box-shadow: none;
+    }
+
+    .info-meta {
+        background: #F8FAFC;
+        border: 1px solid var(--border);
+        border-left: 3px solid var(--primary);
+        border-radius: 4px;
+    }
+
+    .report-title {
+        color: var(--dark);
+        font-size: 1.6rem;
+        font-weight: 700;
+        text-align: left;
+        margin: 2rem 0 1rem;
+        letter-spacing: 0;
+    }
+
+    [data-testid="stMetric"] {
+        background: #FFFFFF;
+        border: 1px solid var(--border);
+        border-radius: 5px;
+        padding: 0.85rem 1rem;
+    }
+
+    div[data-baseweb="select"] > div,
+    div[data-baseweb="input"] > div,
+    [data-testid="stFileUploaderDropzone"] {
+        border-radius: 5px !important;
+    }
+
+    hr {
+        height: 1px;
+        background: var(--border);
     }
 </style>
 """, unsafe_allow_html=True)
@@ -942,7 +1148,7 @@ params = st.query_params
 if params.get("page") in ["admin", "semaiadmin"]:
     st.markdown("""
     <div class="app-header">
-        <h1 class="app-title">🔐 Admin Dashboard</h1>
+        <h1 class="app-title">Admin Dashboard</h1>
         <p class="app-subtitle">GSC Data Monitoring & Export</p>
     </div>
     """, unsafe_allow_html=True)
@@ -950,7 +1156,7 @@ if params.get("page") in ["admin", "semaiadmin"]:
     if not st.session_state.admin_authenticated:
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
-            st.markdown("### 🔐 Admin Authentication")
+            st.markdown("### Admin Authentication")
             admin_password = st.text_input(
                 "Enter Admin Password",
                 type="password",
@@ -959,15 +1165,15 @@ if params.get("page") in ["admin", "semaiadmin"]:
 
             col_btn1, col_btn2 = st.columns(2)
             with col_btn1:
-                if st.button("🔓 Login", use_container_width=True, type="primary"):
+                if st.button("Sign In", use_container_width=True, type="primary"):
                     if admin_password == ADMIN_PASSWORD:
                         st.session_state.admin_authenticated = True
                         st.rerun()
                     else:
-                        st.error("❌ Invalid password")
+                        st.error("Invalid password")
 
             with col_btn2:
-                if st.button("⬅️ Back to App", use_container_width=True):
+                if st.button("Back to App", use_container_width=True):
                     st.query_params.clear()
                     st.rerun()
         st.stop()
@@ -975,9 +1181,9 @@ if params.get("page") in ["admin", "semaiadmin"]:
         # ----- Admin authenticated -----
         col1, col2 = st.columns([3, 1])
         with col1:
-            st.success("✅ Admin Access Granted")
+            st.success("Admin access granted")
         with col2:
-            if st.button("🚪 Logout", use_container_width=True):
+            if st.button("Sign Out", use_container_width=True):
                 st.session_state.admin_authenticated = False
                 st.rerun()
 
@@ -989,9 +1195,9 @@ if params.get("page") in ["admin", "semaiadmin"]:
 
             if is_comparison:
                 # ---------- Comparison admin view ----------
-                st.markdown("### 📊 Period Comparison Data")
+                st.markdown("### Period Comparison Data")
 
-                st.markdown("#### 📅 Period 1 Data")
+                st.markdown("#### Period 1 Data")
                 p1_data = payload_data["period1"]
                 col1, col2, col3, col4 = st.columns(4)
                 with col1:
@@ -1003,11 +1209,11 @@ if params.get("page") in ["admin", "semaiadmin"]:
                 with col4:
                     st.metric("Avg Position", f"{p1_data.get('summary_metrics', {}).get('avg_position', 0):.1f}")
 
-                with st.expander("📄 View Period 1 JSON"):
+                with st.expander("View Period 1 JSON"):
                     st.json(p1_data)
 
                 st.markdown("")
-                st.markdown("#### 📅 Period 2 Data")
+                st.markdown("#### Period 2 Data")
                 p2_data = payload_data["period2"]
                 col1, col2, col3, col4 = st.columns(4)
                 with col1:
@@ -1019,18 +1225,18 @@ if params.get("page") in ["admin", "semaiadmin"]:
                 with col4:
                     st.metric("Avg Position", f"{p2_data.get('summary_metrics', {}).get('avg_position', 0):.1f}")
 
-                with st.expander("📄 View Period 2 JSON"):
+                with st.expander("View Period 2 JSON"):
                     st.json(p2_data)
 
                 st.markdown("")
                 st.divider()
 
-                st.markdown("### 📥 Download Options")
+                st.markdown("### Download Options")
                 col1, col2, col3 = st.columns(3)
 
                 with col1:
                     st.download_button(
-                        "📄 Download JSON",
+                        "Download JSON",
                         json.dumps(payload_data, indent=2),
                         f"gsc_comparison_{date.today().strftime('%Y%m%d')}.json",
                         mime="application/json",
@@ -1049,7 +1255,7 @@ if params.get("page") in ["admin", "semaiadmin"]:
                         excel_buffer.seek(0)
 
                         st.download_button(
-                            "📊 Download Excel",
+                            "Download Excel",
                             excel_buffer,
                             f"gsc_comparison_{date.today().strftime('%Y%m%d')}.xlsx",
                             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -1059,13 +1265,13 @@ if params.get("page") in ["admin", "semaiadmin"]:
                         st.error(f"Excel export error: {exc}")
 
                 with col3:
-                    if st.button("⬅️ Back to App", use_container_width=True, type="primary", key="admin_back_comparison"):
+                    if st.button("Back to App", use_container_width=True, type="primary", key="admin_back_comparison"):
                         st.query_params.clear()
                         st.rerun()
 
             else:
                 # ---------- Single-period admin view ----------
-                st.markdown("### 📊 GSC Extraction Data")
+                st.markdown("### GSC Extraction Data")
 
                 col1, col2, col3 = st.columns(3)
                 with col1:
@@ -1094,7 +1300,7 @@ if params.get("page") in ["admin", "semaiadmin"]:
                     """.format(len(payload_data.get("top_queries_by_impressions", []))), unsafe_allow_html=True)
 
                 st.markdown("")
-                st.markdown("### 📈 Summary Metrics")
+                st.markdown("### Summary Metrics")
                 metrics = payload_data.get("summary_metrics", {})
                 col1, col2, col3, col4 = st.columns(4)
                 with col1:
@@ -1109,7 +1315,7 @@ if params.get("page") in ["admin", "semaiadmin"]:
                 st.markdown("")
                 st.divider()
 
-                tab1, tab2, tab3 = st.tabs(["📊 Top Queries", "📄 Top Pages", "📋 Full JSON"])
+                tab1, tab2, tab3 = st.tabs(["Top Queries", "Top Pages", "Full JSON"])
 
                 with tab1:
                     st.markdown("#### Top Queries by Impressions")
@@ -1133,12 +1339,12 @@ if params.get("page") in ["admin", "semaiadmin"]:
                 st.markdown("")
                 st.divider()
 
-                st.markdown("### 📥 Download Options")
+                st.markdown("### Download Options")
                 col1, col2, col3 = st.columns(3)
 
                 with col1:
                     st.download_button(
-                        "📄 Download JSON",
+                        "Download JSON",
                         json.dumps(payload_data, indent=2),
                         f"gsc_data_{date.today().strftime('%Y%m%d')}.json",
                         mime="application/json",
@@ -1168,7 +1374,7 @@ if params.get("page") in ["admin", "semaiadmin"]:
                         excel_buffer.seek(0)
 
                         st.download_button(
-                            "📊 Download Excel",
+                            "Download Excel",
                             excel_buffer,
                             f"gsc_data_{date.today().strftime('%Y%m%d')}.xlsx",
                             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -1179,12 +1385,12 @@ if params.get("page") in ["admin", "semaiadmin"]:
                         st.error(f"Excel export error: {exc}")
 
                 with col3:
-                    if st.button("⬅️ Back to App", use_container_width=True, type="primary", key="admin_back_single"):
+                    if st.button("Back to App", use_container_width=True, type="primary", key="admin_back_single"):
                         st.query_params.clear()
                         st.rerun()
         else:
             st.info("📭 No GSC data available yet. Run an analysis from the main app first.")
-            if st.button("⬅️ Go to App", use_container_width=True, type="primary", key="admin_go_app"):
+            if st.button("Go to App", use_container_width=True, type="primary", key="admin_go_app"):
                 st.query_params.clear()
                 st.rerun()
 
@@ -1203,13 +1409,13 @@ if not st.session_state.authenticated:
 
     st.markdown("""
     <div class="app-header">
-        <h1 class="app-title">📊 Analytics Intelligence Platform</h1>
+        <h1 class="app-title">Analytics Intelligence Platform</h1>
         <p class="app-subtitle">Advanced SEO, GEO & AEO Analytics Powered by SEMAI</p>
     </div>
     """, unsafe_allow_html=True)
 
     st.markdown('<div class="login-container">', unsafe_allow_html=True)
-    st.markdown('<h2 class="login-title">🔐 Welcome!</h2>', unsafe_allow_html=True)
+    st.markdown('<h2 class="login-title">Welcome</h2>', unsafe_allow_html=True)
     st.markdown(
         '<p class="login-subtitle">Sign in with your Google account to access Analytics Intelligence</p>',
         unsafe_allow_html=True,
@@ -1217,14 +1423,14 @@ if not st.session_state.authenticated:
     st.markdown("</div>", unsafe_allow_html=True)
 
     if st.session_state.auth_error:
-        st.error(f"⚠️ {st.session_state.auth_error}")
-        st.info("💡 Please sign in again to continue.")
+        st.error(st.session_state.auth_error)
+        st.info("Please sign in again to continue.")
         st.session_state.auth_error = None
 
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         if ENABLE_TOKEN_PERSISTENCE:
-            st.markdown("### 📧 Enter Your Gmail")
+            st.markdown("### Enter Your Gmail")
             login_email = st.text_input(
                 "Gmail Address",
                 placeholder="your.email@gmail.com",
@@ -1232,7 +1438,7 @@ if not st.session_state.authenticated:
                 label_visibility="collapsed",
             )
 
-            if st.button("🔓 Sign In", use_container_width=True, type="primary"):
+            if st.button("Sign In", use_container_width=True, type="primary"):
                 if login_email:
                     login_email = login_email.strip().lower()
                     if login_email in [u.lower() for u in saved_users]:
@@ -1255,19 +1461,19 @@ if not st.session_state.authenticated:
                                         st.session_state.authenticated = True
                                         st.rerun()
                                     else:
-                                        st.error("❌ Session expired. Please sign in with Google again.")
+                                        st.error("Session expired. Please sign in with Google again.")
                                         st.session_state.auth_error = "Session expired for this account."
                                 else:
-                                    st.error("❌ Session expired. Please sign in with Google again.")
+                                    st.error("Session expired. Please sign in with Google again.")
                             else:
-                                st.error("❌ Failed to load credentials. Please sign in with Google.")
+                                st.error("Failed to load credentials. Please sign in with Google.")
                         else:
-                            st.warning("⚠️ No saved session found for this email. Please sign in with Google first.")
+                            st.warning("No saved session found for this email. Please sign in with Google first.")
                 else:
-                    st.warning("⚠️ Please enter your Gmail address.")
+                    st.warning("Please enter your Gmail address.")
 
             st.divider()
-            st.markdown("##### 🆕 First time? Sign in with Google")
+            st.markdown("##### First-time access")
         login_button()
 
     st.stop()
@@ -1281,14 +1487,14 @@ creds = st.session_state.creds
 
 st.markdown("""
 <div class="app-header">
-    <h1 class="app-title">📊 Analytics Intelligence Platform</h1>
+    <h1 class="app-title">Analytics Intelligence Platform</h1>
     <p class="app-subtitle">Advanced SEO, GEO & AEO Analytics Powered by SEMAI</p>
 </div>
 """, unsafe_allow_html=True)
 
 # ---- Sidebar ----
 with st.sidebar:
-    st.markdown("### 👤 Account")
+    st.markdown("### Account")
     if st.session_state.current_user:
         st.markdown(f"""
         <div style='background: rgba(255,255,255,0.1); padding: 1rem; border-radius: 8px; margin: 1rem 0;'>
@@ -1299,7 +1505,7 @@ with st.sidebar:
 
     st.markdown("")
 
-    if st.button("🔄 Switch Account", use_container_width=True):
+    if st.button("Switch Account", use_container_width=True):
         st.session_state.authenticated = False
         st.session_state.creds = None
         st.session_state.current_user = None
@@ -1307,7 +1513,7 @@ with st.sidebar:
         st.session_state.data_source = None
         st.rerun()
 
-    if st.button("🚪 Logout & Remove", use_container_width=True):
+    if st.button("Sign Out", use_container_width=True):
         if st.session_state.current_user:
             delete_user_credentials(st.session_state.current_user)
         st.session_state.authenticated = False
@@ -1318,7 +1524,7 @@ with st.sidebar:
         st.rerun()
 
     st.divider()
-    st.markdown("### ℹ️ About")
+    st.markdown("### About")
     st.markdown("""
     <div style='color: rgba(255,255,255,0.9); font-size: 0.85rem; line-height: 1.6;'>
     This platform provides comprehensive analytics using Google Search Console or Google Analytics 4 data, powered by SEMAI AI-driven insights.
@@ -1331,14 +1537,14 @@ with st.sidebar:
 #  DATA SOURCE SELECTION
 # ═══════════════════════════════════════════════════════════════════════════════
 
-st.markdown("### 🔌 Select Data Source")
+st.markdown("### Select Data Source")
 st.markdown("Choose which Google service you want to analyze:")
 
 col_src1, col_src2 = st.columns(2)
 
 with col_src1:
     gsc_selected = st.button(
-        "🔍 Google Search Console",
+        "Google Search Console",
         use_container_width=True,
         type="primary" if st.session_state.data_source == "GSC" else "secondary",
         help="Analyze search performance, queries, and rankings",
@@ -1349,7 +1555,7 @@ with col_src1:
 
 with col_src2:
     ga_selected = st.button(
-        "📈 Google Analytics 4",
+        "Google Analytics 4",
         use_container_width=True,
         type="primary" if st.session_state.data_source == "GA" else "secondary",
         help="Analyze website traffic, user behavior, and conversions",
@@ -1364,13 +1570,13 @@ if st.session_state.data_source:
         if st.session_state.data_source == "GSC"
         else "Google Analytics 4"
     )
-    st.success(f"✅ Currently using: **{source_name}**")
+    st.success(f"Current data source: **{source_name}**")
 
-    if st.button("🔄 Change Data Source", use_container_width=False):
+    if st.button("Change Data Source", use_container_width=False):
         st.session_state.data_source = None
         st.rerun()
 else:
-    st.info("👆 Please select a data source to continue")
+    st.info("Select a data source to continue.")
     st.stop()
 
 st.divider()
@@ -1380,12 +1586,12 @@ st.divider()
 # ═══════════════════════════════════════════════════════════════════════════════
 
 if st.session_state.data_source == "GA":
-    st.markdown("### 📈 Google Analytics 4 Analysis")
+    st.markdown("### Google Analytics 4 Analysis")
 
     try:
         extract_ga4_payload, list_ga4_properties = get_ga4_service_functions()
     except RuntimeError as exc:
-        st.error(f"❌ {exc}")
+        st.error(str(exc))
         st.info(
             "GA4 dependencies may have failed to load in the current deployment. "
             "Please check Streamlit Cloud logs and ensure GA4 packages are installed."
@@ -1396,7 +1602,7 @@ if st.session_state.data_source == "GA":
         ga_properties = list_ga4_properties(creds)
 
     if not ga_properties:
-        st.warning("⚠️ No GA4 properties found or unable to access GA4 API.")
+        st.warning("No GA4 properties found or unable to access GA4 API.")
         st.info("""
         **Possible reasons:**
         1. You don't have any GA4 properties linked to this account
@@ -1420,7 +1626,7 @@ if st.session_state.data_source == "GA":
     )
     ga_property_id = property_map.get(selected_ga_property)
 
-    st.markdown("### 📅 Select Date Range")
+    st.markdown("### Select Date Range")
     col_date1, col_date2 = st.columns(2)
 
     with col_date1:
@@ -1443,12 +1649,12 @@ if st.session_state.data_source == "GA":
         )
 
     if ga_start_date > ga_end_date:
-        st.error("⚠️ Start date must be before or equal to end date!")
+        st.error("Start date must be before or equal to end date.")
         st.stop()
 
     ga_days_diff = (ga_end_date - ga_start_date).days + 1
     st.info(
-        f"📊 Analyzing **{ga_days_diff} days** of data from "
+        f"Analyzing **{ga_days_diff} days** of data from "
         f"**{ga_start_date.strftime('%B %d, %Y')}** to "
         f"**{ga_end_date.strftime('%B %d, %Y')}**"
     )
@@ -1456,7 +1662,7 @@ if st.session_state.data_source == "GA":
     st.markdown("")
 
     ga_report_btn = st.button(
-        "🚀 Generate GA4 Deep Audit Report",
+        "Generate GA4 Deep Audit Report",
         use_container_width=True,
         type="primary",
         help="Generate a comprehensive GA4 analysis report",
@@ -1464,13 +1670,13 @@ if st.session_state.data_source == "GA":
 
     if ga_report_btn:
         with st.spinner(
-            f"🔍 Extracting GA4 data from {ga_start_date.strftime('%b %d, %Y')} "
+            f"Extracting GA4 data from {ga_start_date.strftime('%b %d, %Y')} "
             f"to {ga_end_date.strftime('%b %d, %Y')}..."
         ):
             ga_payload = extract_ga4_payload(creds, ga_property_id, ga_start_date, ga_end_date)
 
         if "error" in ga_payload:
-            st.error(f"❌ Error fetching GA4 data: {ga_payload.get('error')}")
+            st.error(f"Error fetching GA4 data: {ga_payload.get('error')}")
             st.stop()
 
         try:
@@ -1481,7 +1687,7 @@ if st.session_state.data_source == "GA":
             )
 
             with st.spinner(
-                "🔎 Checking for a linked GA4 BigQuery event export..."
+                "Checking for a linked GA4 BigQuery event export..."
             ):
                 bigquery_payload = extract_bigquery_payload(
                     creds,
@@ -1495,7 +1701,7 @@ if st.session_state.data_source == "GA":
             bq_metadata = bigquery_payload.get("metadata", {})
             bq_counts = bq_metadata.get("row_counts", {})
             st.success(
-                "✅ BigQuery event export included: "
+                "BigQuery event export included: "
                 f"{sum(bq_counts.values()):,} transformed rows across "
                 f"{len(bq_counts)} datasets."
             )
@@ -1519,10 +1725,10 @@ if st.session_state.data_source == "GA":
             and ga_summary.get("total_users", 0) == 0
             and ga_summary.get("total_pageviews", 0) == 0
         ):
-            st.warning("⚠️ Data Not Available for the selected date range. Try changing the date range.")
+            st.warning("Data is not available for the selected date range. Try changing the date range.")
             st.stop()
 
-        with st.spinner("🤖 Generating GA4 Deep Audit Report with SEMAI AI..."):
+        with st.spinner("Generating GA4 Deep Audit Report..."):
             try:
                 ga_report = report_gen.generate_ga4_deep_audit(ga_payload)
             except Exception as exc:
@@ -1552,7 +1758,7 @@ if st.session_state.data_source == "GA":
 
         st.divider()
         st.markdown(
-            "<h2 style='text-align: center; color: #4F46E5; margin: 2rem 0;'>📈 GA4 Deep Audit Report</h2>",
+            "<h2 class='report-title'>GA4 Deep Audit Report</h2>",
             unsafe_allow_html=True,
         )
 
@@ -1580,7 +1786,7 @@ if st.session_state.data_source == "GA":
             f"Data source: {ga_pay.get('data_source', 'GA4 Data API')}"
         )
         if ga_metrics:
-            st.markdown("### 📊 Quick Metrics Overview")
+            st.markdown("### Metrics Overview")
             metric_cols = st.columns(4)
             with metric_cols[0]:
                 st.metric("Total Sessions", f"{ga_metrics.get('total_sessions', 0):,}")
@@ -1604,7 +1810,6 @@ if st.session_state.data_source == "GA":
 
         st.markdown("")
         render_report_clean(ga_rpt)
-        render_ga4_source_data(ga_pay, "ga4")
 
         st.markdown("")
 
@@ -1616,7 +1821,7 @@ if st.session_state.data_source == "GA":
                 )
                 if word_doc:
                     st.download_button(
-                        "📥 Download Word Document",
+                        "Download Word Document",
                         word_doc,
                         f"ga4_deep_audit_report_{date.today().strftime('%Y%m%d')}.docx",
                         mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -1625,7 +1830,7 @@ if st.session_state.data_source == "GA":
                     )
             with col2:
                 st.download_button(
-                    "📝 Download Markdown",
+                    "Download Markdown",
                     ga_rpt,
                     f"ga4_deep_audit_report_{date.today().strftime('%Y%m%d')}.md",
                     mime="text/markdown",
@@ -1636,19 +1841,19 @@ if st.session_state.data_source == "GA":
             col1, col2, col3 = st.columns([1, 2, 1])
             with col2:
                 st.download_button(
-                    "📥 Download Report (Markdown)",
+                    "Download Report (Markdown)",
                     ga_rpt,
                     f"ga4_deep_audit_report_{date.today().strftime('%Y%m%d')}.md",
                     mime="text/markdown",
                     use_container_width=True,
                     key="ga4_md_dl_fallback",
                 )
-                st.info("💡 Install python-docx for Word document export: pip install python-docx")
+                st.info("Install python-docx to enable Word document export.")
 
         st.markdown("")
         ga4_excel = create_ga4_excel_export(ga_pay)
         st.download_button(
-            "📊 Download Complete Raw GA4 Extract (Excel)",
+            "Download Complete Raw GA4 Extract (Excel)",
             ga4_excel,
             f"ga4_raw_extract_{ga_s.strftime('%Y%m%d')}_{ga_e.strftime('%Y%m%d')}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -1674,7 +1879,7 @@ if st.session_state.data_source == "GA":
             )
 
         st.markdown("")
-        if st.button("🗑️ Clear GA4 Report & Start New Analysis", use_container_width=False, key="clear_ga4_report"):
+        if st.button("Clear Report", use_container_width=False, key="clear_ga4_report"):
             st.session_state.ga4_report = None
             st.session_state.ga4_property_name = None
             st.session_state.ga4_payload = None
@@ -1691,10 +1896,10 @@ if st.session_state.data_source == "GA":
 
 properties = list_properties(creds)
 
-st.markdown("### 🌐 Select Property")
+st.markdown("### Select Property")
 
 if not properties:
-    st.warning("⚠️ No Google Search Console properties found for this account.")
+    st.warning("No Google Search Console properties found for this account.")
     st.info(
         """
         **Possible reasons:**
@@ -1732,11 +1937,11 @@ site_url = st.selectbox(
 )
 
 if not site_url:
-    st.error("⚠️ Please select a valid GSC property before running analysis.")
+    st.error("Select a valid GSC property before running analysis.")
     st.stop()
 
 # ---------- Analysis Mode ----------
-st.markdown("### 🔄 Analysis Mode")
+st.markdown("### Analysis Mode")
 
 
 def on_comparison_mode_change():
@@ -1752,7 +1957,7 @@ comparison_mode = st.checkbox(
 )
 
 if comparison_mode:
-    st.markdown("### 📅 Select Two Periods to Compare")
+    st.markdown("### Select Two Periods to Compare")
 
     col1, col2 = st.columns(2)
 
@@ -1788,17 +1993,17 @@ if comparison_mode:
             )
 
     if period1_start > period1_end:
-        st.error("⚠️ Period 1: Start date must be before or equal to end date!")
+        st.error("Period 1 start date must be before or equal to the end date.")
         st.stop()
     if period2_start > period2_end:
-        st.error("⚠️ Period 2: Start date must be before or equal to end date!")
+        st.error("Period 2 start date must be before or equal to the end date.")
         st.stop()
 
     days_p1 = (period1_end - period1_start).days + 1
     days_p2 = (period2_end - period2_start).days + 1
 
     st.info(
-        f"📊 **Period 1**: {days_p1} days "
+        f"**Period 1**: {days_p1} days "
         f"({period1_start.strftime('%b %d, %Y')} - {period1_end.strftime('%b %d, %Y')}) | "
         f"**Period 2**: {days_p2} days "
         f"({period2_start.strftime('%b %d, %Y')} - {period2_end.strftime('%b %d, %Y')})"
@@ -1808,7 +2013,7 @@ if comparison_mode:
     end_date = period1_end
 
 else:
-    st.markdown("### 📅 Select Date Range")
+    st.markdown("### Select Date Range")
     col_date1, col_date2 = st.columns(2)
 
     with col_date1:
@@ -1825,23 +2030,23 @@ else:
         )
 
     if start_date > end_date:
-        st.error("⚠️ Start date must be before or equal to end date!")
+        st.error("Start date must be before or equal to the end date.")
         st.stop()
 
     days_diff = (end_date - start_date).days + 1
     st.info(
-        f"📊 Analyzing **{days_diff} days** of data from "
+        f"Analyzing **{days_diff} days** of data from "
         f"**{start_date.strftime('%B %d, %Y')}** to "
         f"**{end_date.strftime('%B %d, %Y')}**"
     )
 
 # ---------- Analysis Type Selection ----------
-st.markdown("### 📋 Select Analysis Type")
+st.markdown("### Select Analysis Type")
 st.markdown("")
 
 if comparison_mode:
     analysis_type = "GSC Data Analysis"
-    st.info("ℹ️ File Upload Analytics is disabled when Period Comparison mode is enabled.")
+    st.info("File Upload Analytics is disabled during period comparison.")
 else:
     analysis_type = st.radio(
         "Choose analysis type:",
@@ -1855,17 +2060,17 @@ else:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 if analysis_type == "File Upload Analytics" and not comparison_mode:
-    st.markdown("### 📁 Upload Files for Analysis")
+    st.markdown("### Upload Files for Analysis")
 
     upload_mode = st.radio(
         "Select upload method:",
-        ["📦 ZIP File", "📄 Direct CSV / Excel Files"],
+        ["ZIP File", "Direct CSV / Excel Files"],
         horizontal=True,
         key="upload_mode_selector",
     )
 
-    if upload_mode == "📦 ZIP File":
-        st.info("📤 Upload a ZIP file containing CSV or Excel files to generate Deep Audit and Cluster Audit reports")
+    if upload_mode == "ZIP File":
+        st.info("Upload a ZIP file containing CSV or Excel files to generate both reports.")
 
         uploaded_zip = st.file_uploader(
             "Select ZIP file to upload",
@@ -1876,7 +2081,7 @@ if analysis_type == "File Upload Analytics" and not comparison_mode:
         uploaded_direct = None
 
         if uploaded_zip:
-            st.success(f"✅ ZIP file uploaded: {uploaded_zip.name} ({uploaded_zip.size / 1024:.2f} KB)")
+            st.success(f"ZIP file uploaded: {uploaded_zip.name} ({uploaded_zip.size / 1024:.2f} KB)")
 
             try:
                 with zipfile.ZipFile(uploaded_zip, "r") as zip_ref:
@@ -1886,23 +2091,23 @@ if analysis_type == "File Upload Analytics" and not comparison_mode:
                     ]
 
                     if file_list:
-                        with st.expander("📋 View Files in ZIP"):
+                        with st.expander("View Files in ZIP"):
                             for idx, file in enumerate(file_list, 1):
                                 st.write(f"{idx}. {file}")
                         uploaded_files = file_list
                     else:
-                        st.error("❌ No CSV or Excel files found in the ZIP archive")
+                        st.error("No CSV or Excel files found in the ZIP archive.")
                         uploaded_files = None
             except zipfile.BadZipFile:
-                st.error("❌ Invalid ZIP file. Please upload a valid ZIP archive.")
+                st.error("Invalid ZIP file. Upload a valid ZIP archive.")
                 uploaded_files = None
             except Exception as exc:
-                st.error(f"❌ Error reading ZIP file: {exc}")
+                st.error(f"Error reading ZIP file: {exc}")
                 uploaded_files = None
 
             st.markdown("")
             file_analytics_btn = st.button(
-                "🚀 Generate Reports from Uploaded Files",
+                "Generate Reports",
                 use_container_width=True,
                 type="primary",
                 help="Generate Deep Audit and Cluster Audit reports using uploaded file data",
@@ -1912,7 +2117,7 @@ if analysis_type == "File Upload Analytics" and not comparison_mode:
             uploaded_files = None
 
     else:  # Direct CSV / Excel Files
-        st.info("📤 Upload one or more CSV or Excel files directly to generate Deep Audit and Cluster Audit reports")
+        st.info("Upload one or more CSV or Excel files to generate both reports.")
 
         uploaded_direct = st.file_uploader(
             "Select CSV or Excel files to upload",
@@ -1924,9 +2129,9 @@ if analysis_type == "File Upload Analytics" and not comparison_mode:
 
         if uploaded_direct:
             total_size = sum(f.size for f in uploaded_direct)
-            st.success(f"✅ {len(uploaded_direct)} file(s) uploaded ({total_size / 1024:.2f} KB total)")
+            st.success(f"{len(uploaded_direct)} file(s) uploaded ({total_size / 1024:.2f} KB total)")
 
-            with st.expander("📋 View Uploaded Files"):
+            with st.expander("View Uploaded Files"):
                 for idx, f in enumerate(uploaded_direct, 1):
                     st.write(f"{idx}. {f.name} ({f.size / 1024:.2f} KB)")
 
@@ -1934,7 +2139,7 @@ if analysis_type == "File Upload Analytics" and not comparison_mode:
 
             st.markdown("")
             file_analytics_btn = st.button(
-                "🚀 Generate Reports from Uploaded Files",
+                "Generate Reports",
                 use_container_width=True,
                 type="primary",
                 help="Generate Deep Audit and Cluster Audit reports using uploaded file data",
@@ -1949,7 +2154,7 @@ if analysis_type == "File Upload Analytics" and not comparison_mode:
 
 elif comparison_mode:
     comparison_btn = st.button(
-        "📊 Generate Period Comparison Report",
+        "Generate Period Comparison Report",
         use_container_width=True,
         type="primary",
         help="Compare performance between two time periods with detailed insights",
@@ -1963,7 +2168,7 @@ else:
 
     with col1:
         deep_audit_btn = st.button(
-            "🔍 Generate Deep Audit Report",
+            "Generate Deep Audit Report",
             use_container_width=True,
             type="primary",
             help="Comprehensive SEO/GEO/AEO analysis with detailed insights",
@@ -1971,7 +2176,7 @@ else:
 
     with col2:
         cluster_audit_btn = st.button(
-            "📊 Generate Cluster Audit Report",
+            "Generate Cluster Audit Report",
             use_container_width=True,
             type="secondary",
             help="Cluster-based analysis with actionable recommendations",
@@ -1985,20 +2190,20 @@ else:
 
 if deep_audit_btn:
     with st.spinner(
-        f"🔍 Extracting GSC data from {start_date.strftime('%b %d, %Y')} "
+        f"Extracting GSC data from {start_date.strftime('%b %d, %Y')} "
         f"to {end_date.strftime('%b %d, %Y')}..."
     ):
         payload = extract_payload(creds, site_url, start_date, end_date)
         st.session_state.last_payload = payload
 
     if "note" in payload and "summary_metrics" not in payload:
-        st.warning("⚠️ Data Not Available for the selected date range. Try changing the date range.")
+        st.warning("Data is not available for the selected date range. Try changing the date range.")
         st.stop()
 
-    with st.spinner("🤖 Generating Deep Audit Report with SEMAI AI..."):
+    with st.spinner("Generating Deep Audit Report..."):
         report = report_gen.generate_deep_audit(payload)
 
-    with st.spinner("🤖 Generating GSC Action Report with forensic diagnosis & execution plans..."):
+    with st.spinner("Generating GSC Action Report..."):
         action_rpt = report_gen.generate_action_report(report, payload)
 
     st.session_state.deep_audit_report = report
@@ -2021,11 +2226,11 @@ if st.session_state.deep_audit_report:
 
     st.divider()
 
-    tab_deep, tab_action = st.tabs(["🔍 Deep Audit Report", "🎯 GSC Action Report"])
+    tab_deep, tab_action = st.tabs(["Deep Audit Report", "GSC Action Report"])
 
     with tab_deep:
         st.markdown(
-            "<h2 style='text-align: center; color: #4F46E5; margin: 2rem 0;'>🔍 Deep Audit Report</h2>",
+            "<h2 class='report-title'>Deep Audit Report</h2>",
             unsafe_allow_html=True,
         )
 
@@ -2049,7 +2254,6 @@ if st.session_state.deep_audit_report:
         """, unsafe_allow_html=True)
 
         render_report_clean(da_report)
-        render_gsc_source_data(st.session_state.deep_audit_payload or {}, "deep_audit")
 
         st.markdown("")
 
@@ -2059,7 +2263,7 @@ if st.session_state.deep_audit_report:
                 word_doc = create_word_document(da_report, da_site_url, da_start, da_end, "Deep Audit")
                 if word_doc:
                     st.download_button(
-                        "📥 Download Word Document",
+                        "Download Word Document",
                         word_doc,
                         f"deep_audit_report_{date.today().strftime('%Y%m%d')}.docx",
                         mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -2068,7 +2272,7 @@ if st.session_state.deep_audit_report:
                     )
             with col2:
                 st.download_button(
-                    "📝 Download Markdown",
+                    "Download Markdown",
                     da_report,
                     f"deep_audit_report_{date.today().strftime('%Y%m%d')}.md",
                     mime="text/markdown",
@@ -2079,19 +2283,19 @@ if st.session_state.deep_audit_report:
             col1, col2, col3 = st.columns([1, 2, 1])
             with col2:
                 st.download_button(
-                    "📥 Download Report (Markdown)",
+                    "Download Report (Markdown)",
                     da_report,
                     f"deep_audit_report_{date.today().strftime('%Y%m%d')}.md",
                     mime="text/markdown",
                     use_container_width=True,
                     key="deep_audit_md_dl_fallback",
                 )
-                st.info("💡 Install python-docx for Word document export: pip install python-docx")
+                st.info("Install python-docx to enable Word document export.")
 
     with tab_action:
         if st.session_state.action_report:
             st.markdown(
-                "<h2 style='text-align: center; color: #059669; margin: 2rem 0;'>🎯 GSC Action Report</h2>",
+                "<h2 class='report-title'>GSC Action Report</h2>",
                 unsafe_allow_html=True,
             )
 
@@ -2115,7 +2319,6 @@ if st.session_state.deep_audit_report:
             """, unsafe_allow_html=True)
 
             render_report_clean(st.session_state.action_report)
-            render_gsc_source_data(st.session_state.deep_audit_payload or {}, "action_report")
 
             st.markdown("")
 
@@ -2127,7 +2330,7 @@ if st.session_state.deep_audit_report:
                     )
                     if word_doc:
                         st.download_button(
-                            "📥 Download Action Report (Word)",
+                            "Download Action Report (Word)",
                             word_doc,
                             f"gsc_action_report_{date.today().strftime('%Y%m%d')}.docx",
                             mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -2136,7 +2339,7 @@ if st.session_state.deep_audit_report:
                         )
                 with col2:
                     st.download_button(
-                        "📝 Download Action Report (Markdown)",
+                        "Download Action Report (Markdown)",
                         st.session_state.action_report,
                         f"gsc_action_report_{date.today().strftime('%Y%m%d')}.md",
                         mime="text/markdown",
@@ -2147,7 +2350,7 @@ if st.session_state.deep_audit_report:
                 col1, col2, col3 = st.columns([1, 2, 1])
                 with col2:
                     st.download_button(
-                        "📥 Download Action Report (Markdown)",
+                        "Download Action Report (Markdown)",
                         st.session_state.action_report,
                         f"gsc_action_report_{date.today().strftime('%Y%m%d')}.md",
                         mime="text/markdown",
@@ -2158,7 +2361,7 @@ if st.session_state.deep_audit_report:
             st.info("⏳ Action Report is being generated...")
 
     st.markdown("")
-    if st.button("🗑️ Clear Reports & Start New Analysis", use_container_width=False, key="clear_deep_audit_reports"):
+    if st.button("Clear Reports", use_container_width=False, key="clear_deep_audit_reports"):
         st.session_state.deep_audit_report = None
         st.session_state.action_report = None
         st.session_state.deep_audit_payload = None
@@ -2174,17 +2377,17 @@ if st.session_state.deep_audit_report:
 
 if cluster_audit_btn:
     with st.spinner(
-        f"🔍 Extracting GSC data from {start_date.strftime('%b %d, %Y')} "
+        f"Extracting GSC data from {start_date.strftime('%b %d, %Y')} "
         f"to {end_date.strftime('%b %d, %Y')}..."
     ):
         payload = extract_payload(creds, site_url, start_date, end_date)
         st.session_state.last_payload = payload
 
     if "note" in payload and "summary_metrics" not in payload:
-        st.warning("⚠️ Data Not Available for the selected date range. Try changing the date range.")
+        st.warning("Data is not available for the selected date range. Try changing the date range.")
         st.stop()
 
-    with st.spinner("🤖 Generating Cluster Audit Report with SEMAI AI..."):
+    with st.spinner("Generating Cluster Audit Report..."):
         report = report_gen.generate_cluster_audit(payload)
 
     st.session_state.cluster_audit_report = report
@@ -2206,7 +2409,7 @@ if st.session_state.cluster_audit_report:
 
     st.divider()
     st.markdown(
-        "<h2 style='text-align: center; color: #4F46E5; margin: 2rem 0;'>📊 Cluster Audit Report</h2>",
+        "<h2 class='report-title'>Cluster Audit Report</h2>",
         unsafe_allow_html=True,
     )
 
@@ -2230,7 +2433,6 @@ if st.session_state.cluster_audit_report:
     """, unsafe_allow_html=True)
 
     render_report_clean(ca_report)
-    render_gsc_source_data(st.session_state.cluster_audit_payload or {}, "cluster_audit")
 
     st.markdown("")
 
@@ -2240,7 +2442,7 @@ if st.session_state.cluster_audit_report:
             word_doc = create_word_document(ca_report, ca_site_url, ca_start, ca_end, "Cluster Audit")
             if word_doc:
                 st.download_button(
-                    "📥 Download Word Document",
+                    "Download Word Document",
                     word_doc,
                     f"cluster_audit_report_{date.today().strftime('%Y%m%d')}.docx",
                     mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -2249,7 +2451,7 @@ if st.session_state.cluster_audit_report:
                 )
         with col2:
             st.download_button(
-                "📝 Download Markdown",
+                "Download Markdown",
                 ca_report,
                 f"cluster_audit_report_{date.today().strftime('%Y%m%d')}.md",
                 mime="text/markdown",
@@ -2260,17 +2462,17 @@ if st.session_state.cluster_audit_report:
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
             st.download_button(
-                "📥 Download Report (Markdown)",
+                "Download Report (Markdown)",
                 ca_report,
                 f"cluster_audit_report_{date.today().strftime('%Y%m%d')}.md",
                 mime="text/markdown",
                 use_container_width=True,
                 key="cluster_md_dl_fallback",
             )
-            st.info("💡 Install python-docx for Word document export: pip install python-docx")
+            st.info("Install python-docx to enable Word document export.")
 
     st.markdown("")
-    if st.button("🗑️ Clear Cluster Report & Start New Analysis", use_container_width=False, key="clear_cluster_report"):
+    if st.button("Clear Report", use_container_width=False, key="clear_cluster_report"):
         st.session_state.cluster_audit_report = None
         st.session_state.cluster_audit_payload = None
         st.session_state.cluster_audit_site_url = None
@@ -2291,14 +2493,14 @@ if file_analytics_btn:
             combined_df = process_uploaded_files(uploaded_zip, uploaded_files)
 
     if combined_df is not None:
-        st.success(f"✅ Successfully processed {len(uploaded_files)} file(s) with {len(combined_df):,} total rows")
+        st.success(f"Processed {len(uploaded_files)} file(s) with {len(combined_df):,} total rows.")
 
-        with st.spinner("🤖 Generating Deep Audit Report from uploaded data..."):
+        with st.spinner("Generating Deep Audit Report from uploaded data..."):
             st.session_state.file_deep_report = report_gen.generate_file_deep_audit(
                 combined_df, uploaded_files
             )
 
-        with st.spinner("🤖 Generating Cluster Audit Report from uploaded data..."):
+        with st.spinner("Generating Cluster Audit Report from uploaded data..."):
             st.session_state.file_cluster_report = report_gen.generate_file_cluster_audit(
                 combined_df, uploaded_files
             )
@@ -2318,7 +2520,7 @@ if st.session_state.file_deep_report and st.session_state.file_cluster_report:
 
     st.divider()
     st.markdown(
-        "<h2 style='text-align: center; color: #4F46E5; margin: 2rem 0;'>📊 File Analytics Reports</h2>",
+        "<h2 class='report-title'>File Analytics Reports</h2>",
         unsafe_allow_html=True,
     )
 
@@ -2340,19 +2542,18 @@ if st.session_state.file_deep_report and st.session_state.file_cluster_report:
         </div>
     </div>
     """, unsafe_allow_html=True)
-    render_file_source_data(st.session_state.file_source_df, "file_reports")
 
-    if st.button("🗑️ Clear Reports and Upload New Files", use_container_width=False):
+    if st.button("Clear Reports", use_container_width=False):
         st.session_state.file_deep_report = None
         st.session_state.file_cluster_report = None
         st.session_state.file_report_metadata = None
         st.session_state.file_source_df = None
         st.rerun()
 
-    tab1, tab2 = st.tabs(["🔍 Deep Audit Report", "📊 Cluster Audit Report"])
+    tab1, tab2 = st.tabs(["Deep Audit Report", "Cluster Audit Report"])
 
     with tab1:
-        st.markdown("### 🔍 Deep Audit Report")
+        st.markdown("### Deep Audit Report")
         render_report_clean(deep_report)
 
         st.markdown("")
@@ -2368,7 +2569,7 @@ if st.session_state.file_deep_report and st.session_state.file_cluster_report:
                 )
                 if word_doc:
                     st.download_button(
-                        "📥 Download Deep Audit (Word)",
+                        "Download Deep Audit (Word)",
                         word_doc,
                         f"file_deep_audit_{metadata['generated_date'].strftime('%Y%m%d')}.docx",
                         mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -2377,7 +2578,7 @@ if st.session_state.file_deep_report and st.session_state.file_cluster_report:
                     )
             with col2:
                 st.download_button(
-                    "📝 Download Deep Audit (Markdown)",
+                    "Download Deep Audit (Markdown)",
                     deep_report,
                     f"file_deep_audit_{metadata['generated_date'].strftime('%Y%m%d')}.md",
                     mime="text/markdown",
@@ -2386,7 +2587,7 @@ if st.session_state.file_deep_report and st.session_state.file_cluster_report:
                 )
         else:
             st.download_button(
-                "📥 Download Deep Audit Report",
+                "Download Deep Audit Report",
                 deep_report,
                 f"file_deep_audit_{metadata['generated_date'].strftime('%Y%m%d')}.md",
                 mime="text/markdown",
@@ -2395,7 +2596,7 @@ if st.session_state.file_deep_report and st.session_state.file_cluster_report:
             )
 
     with tab2:
-        st.markdown("### 📊 Cluster Audit Report")
+        st.markdown("### Cluster Audit Report")
         render_report_clean(cluster_report)
 
         st.markdown("")
@@ -2411,7 +2612,7 @@ if st.session_state.file_deep_report and st.session_state.file_cluster_report:
                 )
                 if word_doc:
                     st.download_button(
-                        "📥 Download Cluster Audit (Word)",
+                        "Download Cluster Audit (Word)",
                         word_doc,
                         f"file_cluster_audit_{metadata['generated_date'].strftime('%Y%m%d')}.docx",
                         mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -2420,7 +2621,7 @@ if st.session_state.file_deep_report and st.session_state.file_cluster_report:
                     )
             with col2:
                 st.download_button(
-                    "📝 Download Cluster Audit (Markdown)",
+                    "Download Cluster Audit (Markdown)",
                     cluster_report,
                     f"file_cluster_audit_{metadata['generated_date'].strftime('%Y%m%d')}.md",
                     mime="text/markdown",
@@ -2429,7 +2630,7 @@ if st.session_state.file_deep_report and st.session_state.file_cluster_report:
                 )
         else:
             st.download_button(
-                "📥 Download Cluster Audit Report",
+                "Download Cluster Audit Report",
                 cluster_report,
                 f"file_cluster_audit_{metadata['generated_date'].strftime('%Y%m%d')}.md",
                 mime="text/markdown",
@@ -2443,13 +2644,13 @@ if st.session_state.file_deep_report and st.session_state.file_cluster_report:
 
 if comparison_btn:
     with st.spinner(
-        f"🔍 Extracting Period 1 data "
+        f"Extracting Period 1 data "
         f"({period1_start.strftime('%b %d, %Y')} - {period1_end.strftime('%b %d, %Y')})..."
     ):
         payload1 = extract_payload(creds, site_url, period1_start, period1_end)
 
     with st.spinner(
-        f"🔍 Extracting Period 2 data "
+        f"Extracting Period 2 data "
         f"({period2_start.strftime('%b %d, %Y')} - {period2_end.strftime('%b %d, %Y')})..."
     ):
         payload2 = extract_payload(creds, site_url, period2_start, period2_end)
@@ -2463,7 +2664,7 @@ if comparison_btn:
         if p2_empty:
             missing.append("Period 2")
         st.warning(
-            f"⚠️ Data Not Available for {' and '.join(missing)}. "
+            f"Data is not available for {' and '.join(missing)}. "
             "Try changing the date range."
         )
         st.stop()
@@ -2474,15 +2675,15 @@ if comparison_btn:
         "period2": payload2,
     }
 
-    with st.spinner("📊 Calculating comparison metrics..."):
+    with st.spinner("Calculating comparison metrics..."):
         comp_metrics = calculate_comparison_metrics(payload1, payload2)
 
-    with st.spinner("🤖 Generating Period Comparison Report with SEMAI AI..."):
+    with st.spinner("Generating Period Comparison Report..."):
         report = report_gen.generate_comparison_report(payload1, payload2, comp_metrics)
 
     st.divider()
     st.markdown(
-        "<h2 style='text-align: center; color: #4F46E5; margin: 2rem 0;'>📊 Period Comparison Report</h2>",
+        "<h2 class='report-title'>Period Comparison Report</h2>",
         unsafe_allow_html=True,
     )
 
@@ -2505,7 +2706,7 @@ if comparison_btn:
     </div>
     """, unsafe_allow_html=True)
 
-    st.markdown("### 📈 Quick Metrics Overview")
+    st.markdown("### Metrics Overview")
     metric_cols = st.columns(4)
 
     with metric_cols[0]:
@@ -2546,7 +2747,6 @@ if comparison_btn:
 
     st.markdown("")
     render_report_clean(report)
-    render_comparison_source_data(payload1, payload2, comp_metrics, "comparison")
 
     st.markdown("")
 
@@ -2559,7 +2759,7 @@ if comparison_btn:
             )
             if word_doc:
                 st.download_button(
-                    "📥 Download Word Document",
+                    "Download Word Document",
                     word_doc,
                     f"comparison_report_{date.today().strftime('%Y%m%d')}.docx",
                     mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -2567,7 +2767,7 @@ if comparison_btn:
                 )
         with col2:
             st.download_button(
-                "📝 Download Markdown",
+                "Download Markdown",
                 report,
                 f"comparison_report_{date.today().strftime('%Y%m%d')}.md",
                 mime="text/markdown",
@@ -2577,10 +2777,10 @@ if comparison_btn:
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
             st.download_button(
-                "📥 Download Report (Markdown)",
+                "Download Report (Markdown)",
                 report,
                 f"comparison_report_{date.today().strftime('%Y%m%d')}.md",
                 mime="text/markdown",
                 use_container_width=True,
             )
-            st.info("💡 Install python-docx for Word document export: pip install python-docx")
+            st.info("Install python-docx to enable Word document export.")
