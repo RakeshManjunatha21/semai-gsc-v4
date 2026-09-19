@@ -323,6 +323,88 @@ def render_ga4_source_data(payload: dict, key_prefix: str):
                 st.markdown("#### Device Breakdown")
                 st.dataframe(devices_df, use_container_width=True, height=220)
 
+            extraction_metadata = payload.get("extraction_metadata", {})
+            report_quality = extraction_metadata.get("report_quality", {})
+            thresholded_reports = sorted(
+                name for name, quality in report_quality.items()
+                if quality.get("subject_to_thresholding", False)
+            )
+            sampled_reports = sorted(
+                name for name, quality in report_quality.items()
+                if quality.get("sampling_metadatas", [])
+            )
+            st.markdown("#### Extraction Quality")
+            quality_col1, quality_col2, quality_col3 = st.columns(3)
+            quality_col1.metric(
+                "All API Rows Retrieved",
+                "Yes" if extraction_metadata.get(
+                    "all_datasets_complete", False
+                ) else "No",
+            )
+            quality_col2.metric(
+                "Sampled Reports",
+                len(sampled_reports),
+            )
+            quality_col3.metric(
+                "Thresholded Reports",
+                len(thresholded_reports),
+            )
+            if thresholded_reports:
+                st.caption(
+                    "Google privacy thresholding applies to: "
+                    + ", ".join(thresholded_reports)
+                )
+            recovery_datasets = extraction_metadata.get(
+                "datasets_using_metric_recovery", []
+            )
+            if recovery_datasets:
+                st.caption(
+                    "Metrics were fetched separately and merged by dimensions "
+                    "for: " + ", ".join(recovery_datasets)
+                )
+            reconciliation_df = pd.DataFrame(
+                extraction_metadata.get("reconciliation", [])
+            )
+            if not reconciliation_df.empty:
+                st.dataframe(
+                    reconciliation_df,
+                    use_container_width=True,
+                    hide_index=True,
+                    height=220,
+                )
+
+            key_event_configuration = payload.get(
+                "key_event_configuration", {}
+            )
+            key_event_rows = []
+            for event_name, activity in key_event_configuration.get(
+                "configured_activity", {}
+            ).items():
+                key_event_rows.append({
+                    "event_name": event_name,
+                    "configured_as_key_event": True,
+                    **activity,
+                })
+            configured_names = set(
+                key_event_configuration.get("configured_names", [])
+            )
+            for event_name, activity in key_event_configuration.get(
+                "core_funnel_activity", {}
+            ).items():
+                if event_name not in configured_names:
+                    key_event_rows.append({
+                        "event_name": event_name,
+                        **activity,
+                    })
+            if key_event_rows:
+                st.markdown("#### Key Event Configuration")
+                st.dataframe(
+                    pd.DataFrame(key_event_rows),
+                    use_container_width=True,
+                    hide_index=True,
+                    height=220,
+                )
+
         with tab2:
             channels_df = pd.DataFrame(payload.get("channel_performance", []))
             if not channels_df.empty:
@@ -1141,50 +1223,51 @@ if not st.session_state.authenticated:
 
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        st.markdown("### 📧 Enter Your Gmail")
-        login_email = st.text_input(
-            "Gmail Address",
-            placeholder="your.email@gmail.com",
-            key="login_email_input",
-            label_visibility="collapsed",
-        )
+        if ENABLE_TOKEN_PERSISTENCE:
+            st.markdown("### 📧 Enter Your Gmail")
+            login_email = st.text_input(
+                "Gmail Address",
+                placeholder="your.email@gmail.com",
+                key="login_email_input",
+                label_visibility="collapsed",
+            )
 
-        if st.button("🔓 Sign In", use_container_width=True, type="primary"):
-            if login_email:
-                login_email = login_email.strip().lower()
-                if login_email in [u.lower() for u in saved_users]:
-                    matched_user = next(
-                        (u for u in saved_users if u.lower() == login_email), None
-                    )
-                    if matched_user:
-                        creds = load_credentials(matched_user)
-                        if creds:
-                            if creds.valid:
-                                st.session_state.creds = creds
-                                st.session_state.current_user = matched_user
-                                st.session_state.authenticated = True
-                                st.rerun()
-                            elif creds.expired and creds.refresh_token:
-                                refreshed_creds = refresh_credentials(creds, matched_user)
-                                if refreshed_creds:
-                                    st.session_state.creds = refreshed_creds
+            if st.button("🔓 Sign In", use_container_width=True, type="primary"):
+                if login_email:
+                    login_email = login_email.strip().lower()
+                    if login_email in [u.lower() for u in saved_users]:
+                        matched_user = next(
+                            (u for u in saved_users if u.lower() == login_email), None
+                        )
+                        if matched_user:
+                            creds = load_credentials(matched_user)
+                            if creds:
+                                if creds.valid:
+                                    st.session_state.creds = creds
                                     st.session_state.current_user = matched_user
                                     st.session_state.authenticated = True
                                     st.rerun()
+                                elif creds.expired and creds.refresh_token:
+                                    refreshed_creds = refresh_credentials(creds, matched_user)
+                                    if refreshed_creds:
+                                        st.session_state.creds = refreshed_creds
+                                        st.session_state.current_user = matched_user
+                                        st.session_state.authenticated = True
+                                        st.rerun()
+                                    else:
+                                        st.error("❌ Session expired. Please sign in with Google again.")
+                                        st.session_state.auth_error = "Session expired for this account."
                                 else:
                                     st.error("❌ Session expired. Please sign in with Google again.")
-                                    st.session_state.auth_error = "Session expired for this account."
                             else:
-                                st.error("❌ Session expired. Please sign in with Google again.")
+                                st.error("❌ Failed to load credentials. Please sign in with Google.")
                         else:
-                            st.error("❌ Failed to load credentials. Please sign in with Google.")
+                            st.warning("⚠️ No saved session found for this email. Please sign in with Google first.")
                 else:
-                    st.warning("⚠️ No saved session found for this email. Please sign in with Google first.")
-            else:
-                st.warning("⚠️ Please enter your Gmail address.")
+                    st.warning("⚠️ Please enter your Gmail address.")
 
-        st.divider()
-        st.markdown("##### 🆕 First time? Sign in with Google")
+            st.divider()
+            st.markdown("##### 🆕 First time? Sign in with Google")
         login_button()
 
     st.stop()

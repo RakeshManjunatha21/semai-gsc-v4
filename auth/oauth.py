@@ -26,11 +26,6 @@ from config import (
 )
 
 
-# In-memory fallback store for deployments where file persistence is disabled.
-# This survives reruns while the app process is alive.
-_MEMORY_CREDENTIALS: dict[str, object] = {}
-
-
 # =============================================================================
 # Helpers
 # =============================================================================
@@ -93,7 +88,6 @@ def save_credentials(creds, email: str) -> None:
         email: The user's email address.
     """
     if not ENABLE_TOKEN_PERSISTENCE:
-        _MEMORY_CREDENTIALS[email] = creds
         return
 
     token_path = get_token_path(email)
@@ -111,7 +105,7 @@ def load_credentials(email: str):
         A Google ``Credentials`` object or ``None`` if unavailable.
     """
     if not ENABLE_TOKEN_PERSISTENCE:
-        return _MEMORY_CREDENTIALS.get(email)
+        return None
 
     token_path = get_token_path(email)
     if not os.path.exists(token_path):
@@ -157,7 +151,6 @@ def delete_user_credentials(email: str) -> None:
         email: The user's email address.
     """
     if not ENABLE_TOKEN_PERSISTENCE:
-        _MEMORY_CREDENTIALS.pop(email, None)
         return
 
     token_path = get_token_path(email)
@@ -176,7 +169,7 @@ def get_all_saved_users() -> list[str]:
         List of email strings.
     """
     if not ENABLE_TOKEN_PERSISTENCE:
-        return sorted(_MEMORY_CREDENTIALS.keys())
+        return []
 
     if not os.path.exists(TOKENS_DIR):
         return []

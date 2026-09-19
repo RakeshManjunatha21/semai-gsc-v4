@@ -33,6 +33,7 @@ def create_ga4_excel_export(payload: dict) -> BytesIO:
     row_counts = metadata.get("dataset_row_counts", {})
     errors = metadata.get("errors", {})
     metric_errors = metadata.get("metric_errors", {})
+    report_quality = metadata.get("report_quality", {})
 
     with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
         overview = {
@@ -47,6 +48,7 @@ def create_ga4_excel_export(payload: dict) -> BytesIO:
 
         status_rows = []
         for dataset_name, counts in row_counts.items():
+            quality = report_quality.get(dataset_name, {})
             status_rows.append(
                 {
                     "dataset": dataset_name,
@@ -59,13 +61,54 @@ def create_ga4_excel_export(payload: dict) -> BytesIO:
                     "omitted_metrics": ", ".join(
                         sorted(metric_errors.get(dataset_name, {}))
                     ),
+                    "metric_recovery_used": quality.get(
+                        "metric_recovery_used", False
+                    ),
+                    "subject_to_thresholding": quality.get(
+                        "subject_to_thresholding", False
+                    ),
+                    "data_loss_from_other_row": quality.get(
+                        "data_loss_from_other_row", False
+                    ),
+                    "sampled": bool(quality.get("sampling_metadatas", [])),
+                    "time_zone": quality.get("time_zone", ""),
+                    "currency_code": quality.get("currency_code", ""),
                 }
             )
         pd.DataFrame(status_rows).to_excel(
             writer, sheet_name="Extraction Status", index=False
         )
+        pd.DataFrame(metadata.get("reconciliation", [])).to_excel(
+            writer, sheet_name="Reconciliation", index=False
+        )
+        key_event_configuration = payload.get("key_event_configuration", {})
+        key_event_rows = []
+        for event_name, activity in key_event_configuration.get(
+            "configured_activity", {}
+        ).items():
+            key_event_rows.append({
+                "event_name": event_name,
+                "configured_as_key_event": True,
+                **activity,
+            })
+        for event_name, activity in key_event_configuration.get(
+            "core_funnel_activity", {}
+        ).items():
+            if event_name not in key_event_configuration.get(
+                "configured_activity", {}
+            ):
+                key_event_rows.append({
+                    "event_name": event_name,
+                    **activity,
+                })
+        pd.DataFrame(key_event_rows).to_excel(
+            writer, sheet_name="Key Event Config", index=False
+        )
 
-        used_sheet_names = {"Summary", "Extraction Status"}
+        used_sheet_names = {
+            "Summary", "Extraction Status", "Reconciliation",
+            "Key Event Config",
+        }
         for dataset_name, rows in payload.get("datasets", {}).items():
             dataframe = pd.DataFrame(rows)
             chunks = max(1, (len(dataframe) + _EXCEL_MAX_DATA_ROWS - 1)

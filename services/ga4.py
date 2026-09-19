@@ -191,6 +191,29 @@ def list_ga4_properties(creds) -> list[dict]:
         return []
 
 
+def list_ga4_key_event_names(creds, property_id: str) -> list[str]:
+    """Return event names currently marked as key events for a property."""
+    service = build("analyticsadmin", "v1alpha", credentials=creds)
+    parent = f"properties/{property_id}"
+    names: list[str] = []
+    page_token = None
+
+    while True:
+        response = service.properties().keyEvents().list(
+            parent=parent,
+            pageSize=200,
+            pageToken=page_token,
+        ).execute()
+        names.extend(
+            item["eventName"]
+            for item in response.get("keyEvents", [])
+            if item.get("eventName")
+        )
+        page_token = response.get("nextPageToken")
+        if not page_token:
+            return sorted(set(names))
+
+
 # ---------------------------------------------------------------------------
 # Internal helpers – native package variant
 # ---------------------------------------------------------------------------
@@ -511,11 +534,18 @@ def _run_report_all_rows(
     end_date,
     dimensions: list[str],
     metrics: list[str],
-) -> tuple[list[dict], int]:
+) -> tuple[list[dict], int, dict]:
     """Run one GA4 report and paginate until every available row is read."""
     rows: list[dict] = []
     offset = 0
     reported_row_count = 0
+    report_quality = {
+        "data_loss_from_other_row": False,
+        "subject_to_thresholding": False,
+        "sampling_metadatas": [],
+        "time_zone": "",
+        "currency_code": "",
+    }
 
     while True:
         body = {
@@ -532,6 +562,26 @@ def _run_report_all_rows(
             service.properties()
             .runReport(property=property_name, body=body)
             .execute()
+        )
+        response_metadata = response.get("metadata", {})
+        report_quality["data_loss_from_other_row"] = (
+            report_quality["data_loss_from_other_row"]
+            or bool(response_metadata.get("dataLossFromOtherRow", False))
+        )
+        report_quality["subject_to_thresholding"] = (
+            report_quality["subject_to_thresholding"]
+            or bool(response_metadata.get("subjectToThresholding", False))
+        )
+        report_quality["sampling_metadatas"].extend(
+            response_metadata.get("samplingMetadatas", [])
+        )
+        report_quality["time_zone"] = (
+            report_quality["time_zone"]
+            or response_metadata.get("timeZone", "")
+        )
+        report_quality["currency_code"] = (
+            report_quality["currency_code"]
+            or response_metadata.get("currencyCode", "")
         )
         page_rows = response.get("rows", [])
         reported_row_count = int(response.get("rowCount", len(page_rows)))
@@ -559,7 +609,7 @@ def _run_report_all_rows(
         if not page_rows or offset >= reported_row_count:
             break
 
-    return rows, reported_row_count
+    return rows, reported_row_count, report_quality
 
 
 def _run_report_resilient(
@@ -569,10 +619,10 @@ def _run_report_resilient(
     end_date,
     dimensions: list[str],
     metrics: list[str],
-) -> tuple[list[dict], int, dict[str, str]]:
+) -> tuple[list[dict], int, dict[str, str], dict]:
     """Run a report, recovering compatible metrics if the full set fails."""
     try:
-        rows, row_count = _run_report_all_rows(
+        rows, row_count, report_quality = _run_report_all_rows(
             service,
             property_name,
             start_date,
@@ -580,15 +630,16 @@ def _run_report_resilient(
             dimensions,
             metrics,
         )
-        return rows, row_count, {}
+        return rows, row_count, {}, report_quality
     except Exception as combined_error:
         merged_rows: dict[tuple, dict] = {}
         metric_errors: dict[str, str] = {}
+        quality_by_metric: dict[str, dict] = {}
         largest_row_count = 0
 
         for metric in metrics:
             try:
-                rows, row_count = _run_report_all_rows(
+                rows, row_count, report_quality = _run_report_all_rows(
                     service,
                     property_name,
                     start_date,
@@ -596,6 +647,7 @@ def _run_report_resilient(
                     dimensions,
                     [metric],
                 )
+                quality_by_metric[metric] = report_quality
                 largest_row_count = max(largest_row_count, row_count)
                 for row in rows:
                     key = tuple(row.get(name, "") for name in dimensions)
@@ -608,7 +660,39 @@ def _run_report_resilient(
         if len(metric_errors) == len(metrics):
             raise RuntimeError(str(combined_error)) from combined_error
 
-        return list(merged_rows.values()), largest_row_count, metric_errors
+        recovered_qualities = list(quality_by_metric.values())
+        return (
+            list(merged_rows.values()),
+            largest_row_count,
+            metric_errors,
+            {
+                "data_loss_from_other_row": any(
+                    quality.get("data_loss_from_other_row", False)
+                    for quality in recovered_qualities
+                ),
+                "subject_to_thresholding": any(
+                    quality.get("subject_to_thresholding", False)
+                    for quality in recovered_qualities
+                ),
+                "sampling_metadatas": [
+                    sampling
+                    for quality in recovered_qualities
+                    for sampling in quality.get("sampling_metadatas", [])
+                ],
+                "time_zone": next((
+                    quality.get("time_zone", "")
+                    for quality in recovered_qualities
+                    if quality.get("time_zone")
+                ), ""),
+                "currency_code": next((
+                    quality.get("currency_code", "")
+                    for quality in recovered_qualities
+                    if quality.get("currency_code")
+                ), ""),
+                "metric_recovery_used": True,
+                "recovered_metrics": sorted(quality_by_metric),
+            },
+        )
 
 
 def _extract_ga4_comprehensive(
@@ -621,7 +705,12 @@ def _extract_ga4_comprehensive(
     service = build("analyticsdata", "v1beta", credentials=creds)
     property_name = f"properties/{property_id}"
 
-    summary_rows, summary_count, summary_metric_errors = _run_report_resilient(
+    (
+        summary_rows,
+        summary_count,
+        summary_metric_errors,
+        summary_quality,
+    ) = _run_report_resilient(
         service,
         property_name,
         start_date,
@@ -639,10 +728,16 @@ def _extract_ga4_comprehensive(
     extraction_errors: dict[str, str] = {}
     metric_errors: dict[str, dict[str, str]] = {}
     row_counts: dict[str, dict[str, int | bool]] = {}
+    report_quality: dict[str, dict] = {"summary": summary_quality}
 
     for dataset_name, definition in _REPORT_DEFINITIONS.items():
         try:
-            rows, api_row_count, omitted_metrics = _run_report_resilient(
+            (
+                rows,
+                api_row_count,
+                omitted_metrics,
+                dataset_quality,
+            ) = _run_report_resilient(
                 service,
                 property_name,
                 start_date,
@@ -651,6 +746,7 @@ def _extract_ga4_comprehensive(
                 definition["metrics"],
             )
             datasets[dataset_name] = rows
+            report_quality[dataset_name] = dataset_quality
             if omitted_metrics:
                 metric_errors[dataset_name] = omitted_metrics
             row_counts[dataset_name] = {
@@ -743,6 +839,60 @@ def _extract_ga4_comprehensive(
         countries, key=lambda row: row["sessions"], reverse=True
     )
     payload["datasets"] = datasets
+    try:
+        configured_key_events = list_ga4_key_event_names(creds, property_id)
+        event_activity = {
+            row.get("eventName", ""): {
+                "event_count": int(row.get("eventCount", 0)),
+                "key_event_count": int(row.get("keyEvents", 0)),
+            }
+            for row in datasets.get("events", [])
+        }
+        payload["key_event_configuration"] = {
+            "configured_names": configured_key_events,
+            "configured_activity": {
+                name: event_activity.get(
+                    name, {"event_count": 0, "key_event_count": 0}
+                )
+                for name in configured_key_events
+            },
+            "core_funnel_activity": {
+                name: {
+                    **event_activity.get(
+                        name, {"event_count": 0, "key_event_count": 0}
+                    ),
+                    "configured_as_key_event": name in configured_key_events,
+                }
+                for name in [
+                    "form_start", "form_submit", "new_registration",
+                ]
+            },
+        }
+    except Exception as exc:
+        payload["key_event_configuration"] = {
+            "error": str(exc),
+            "configured_names": [],
+        }
+    reconciliation = []
+    for metric, summary_key, dataset_name in [
+        ("sessions", "total_sessions", "daily_overview"),
+        ("eventCount", "total_events", "daily_overview"),
+        ("screenPageViews", "total_pageviews", "daily_overview"),
+        ("sessions", "total_sessions", "traffic_acquisition"),
+        ("sessions", "total_sessions", "countries"),
+    ]:
+        summary_value = payload["summary_metrics"].get(summary_key, 0)
+        dataset_value = sum(
+            row.get(metric, 0) for row in datasets.get(dataset_name, [])
+        )
+        reconciliation.append({
+            "metric": metric,
+            "summary_value": summary_value,
+            "dataset": dataset_name,
+            "dataset_sum": dataset_value,
+            "difference": dataset_value - summary_value,
+            "matches": dataset_value == summary_value,
+        })
     payload["extraction_metadata"] = {
         "page_size": _PAGE_SIZE,
         "summary_api_row_count": summary_count,
@@ -753,6 +903,18 @@ def _extract_ga4_comprehensive(
                if summary_metric_errors else {}),
             **metric_errors,
         },
+        "report_quality": report_quality,
+        "reconciliation": reconciliation,
+        "datasets_using_metric_recovery": sorted(
+            name for name, quality in report_quality.items()
+            if quality.get("metric_recovery_used", False)
+        ),
+        "all_reports_unrestricted": all(
+            not quality.get("data_loss_from_other_row", False)
+            and not quality.get("subject_to_thresholding", False)
+            and not quality.get("sampling_metadatas", [])
+            for quality in report_quality.values()
+        ),
         "all_datasets_complete": (
             not extraction_errors
             and not summary_metric_errors

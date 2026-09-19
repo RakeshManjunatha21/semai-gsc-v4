@@ -7,6 +7,7 @@ from datetime import date, datetime
 from decimal import Decimal
 
 from googleapiclient.discovery import build
+from services.ga4 import list_ga4_key_event_names
 
 
 _IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
@@ -36,28 +37,7 @@ def list_bigquery_links(creds, property_id: str) -> list[dict]:
             return links
 
 
-def list_key_event_names(creds, property_id: str) -> list[str]:
-    """Return the event names currently marked as GA4 key events."""
-    service = build("analyticsadmin", "v1alpha", credentials=creds)
-    parent = f"properties/{property_id}"
-    names: list[str] = []
-    page_token = None
-
-    while True:
-        request = service.properties().keyEvents().list(
-            parent=parent,
-            pageSize=200,
-            pageToken=page_token,
-        )
-        response = request.execute()
-        names.extend(
-            item["eventName"]
-            for item in response.get("keyEvents", [])
-            if item.get("eventName")
-        )
-        page_token = response.get("nextPageToken")
-        if not page_token:
-            return sorted(set(names))
+list_key_event_names = list_ga4_key_event_names
 
 
 def _validated_identifier(value: str, label: str) -> str:
@@ -157,17 +137,20 @@ WITH source_events AS (
     geo.region,
     geo.city,
     COALESCE(
-      collected_traffic_source.manual_source,
+      (SELECT value.string_value FROM UNNEST(event_params)
+        WHERE key = 'source' LIMIT 1),
       traffic_source.source,
       '(direct)'
     ) AS source,
     COALESCE(
-      collected_traffic_source.manual_medium,
+      (SELECT value.string_value FROM UNNEST(event_params)
+        WHERE key = 'medium' LIMIT 1),
       traffic_source.medium,
       '(none)'
     ) AS medium,
     COALESCE(
-      collected_traffic_source.manual_campaign_name,
+      (SELECT value.string_value FROM UNNEST(event_params)
+        WHERE key = 'campaign' LIMIT 1),
       traffic_source.name,
       '(not set)'
     ) AS campaign
