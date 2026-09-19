@@ -122,6 +122,14 @@ def get_ga4_service_functions():
     except Exception as exc:
         raise RuntimeError(f"Unable to load GA4 service module: {exc}") from exc
 
+
+def parse_ga4_exploration_upload(uploaded_file) -> list[dict]:
+    """Convert a GA4 Explore CSV upload into JSON-safe row dictionaries."""
+    dataframe = pd.read_csv(uploaded_file, encoding="utf-8-sig")
+    dataframe.columns = [str(column).strip() for column in dataframe.columns]
+    return json.loads(dataframe.to_json(orient="records", date_format="iso"))
+
+
 def login_button():
     """Render the Google sign-in link button."""
     flow = build_flow()
@@ -2249,6 +2257,29 @@ if st.session_state.data_source == "GA":
         f"**{ga_end_date.strftime('%B %d, %Y')}**"
     )
 
+    st.markdown("### Exploration Evidence")
+    path_upload_col, funnel_upload_col = st.columns(2)
+    with path_upload_col:
+        ga_path_exploration_file = st.file_uploader(
+            "Path Exploration CSV",
+            type=["csv"],
+            help=(
+                "Optional. Export the Path Exploration from GA4 Explore as "
+                "CSV to include its complete historical output."
+            ),
+            key="ga_path_exploration_file",
+        )
+    with funnel_upload_col:
+        ga_funnel_exploration_file = st.file_uploader(
+            "Funnel Exploration CSV",
+            type=["csv"],
+            help=(
+                "Optional. Upload an exact GA4 Explore funnel definition; "
+                "otherwise the standard funnel is collected automatically."
+            ),
+            key="ga_funnel_exploration_file",
+        )
+
     st.markdown("")
 
     ga_report_btn = st.button(
@@ -2367,6 +2398,44 @@ if st.session_state.data_source == "GA":
                 "message": str(exc),
             }
 
+        exploration_uploads = {}
+        for dataset_name, uploaded_file in [
+            ("uploaded_path_exploration", ga_path_exploration_file),
+            ("uploaded_funnel_exploration", ga_funnel_exploration_file),
+        ]:
+            if uploaded_file is None:
+                continue
+            try:
+                uploaded_rows = parse_ga4_exploration_upload(uploaded_file)
+            except Exception as exc:
+                st.error(
+                    f"Unable to read {uploaded_file.name}: {exc}"
+                )
+                st.stop()
+            ga_payload.setdefault("datasets", {})[dataset_name] = uploaded_rows
+            extraction_metadata = ga_payload.setdefault(
+                "extraction_metadata", {}
+            )
+            extraction_metadata.setdefault(
+                "dataset_row_counts", {}
+            )[dataset_name] = {
+                "api_row_count": len(uploaded_rows),
+                "extracted_row_count": len(uploaded_rows),
+                "complete": True,
+            }
+            extraction_metadata.setdefault(
+                "report_quality", {}
+            )[dataset_name] = {
+                "source": "GA4 Explore CSV upload",
+                "sampling_metadatas": [],
+            }
+            exploration_uploads[dataset_name] = {
+                "file_name": uploaded_file.name,
+                "row_count": len(uploaded_rows),
+                "status": "available" if uploaded_rows else "empty",
+            }
+        ga_payload["exploration_uploads"] = exploration_uploads
+
         # Check for empty GA4 data (all summary metrics are zero)
         ga_summary = ga_payload.get("summary_metrics", {})
         if (
@@ -2439,11 +2508,6 @@ if st.session_state.data_source == "GA":
         ga_metrics = ga_pay.get("summary_metrics", {})
         st.caption(
             f"Data source: {ga_pay.get('data_source', 'GA4 Data API')}"
-        )
-        st.caption(
-            "Report terminology: Blocked means the evidence required for a "
-            "calculation was unavailable in this run. It is not an API denial "
-            "unless the stated reason is an API or permission error."
         )
         if ga_metrics:
             st.markdown("### Metrics Overview")
@@ -2524,14 +2588,6 @@ if st.session_state.data_source == "GA":
             use_container_width=True,
             key="ga4_raw_excel_dl",
         )
-
-        extraction_errors = ga_pay.get("extraction_metadata", {}).get("errors", {})
-        if extraction_errors:
-            failed_names = ", ".join(sorted(extraction_errors))
-            st.warning(
-                "Some optional GA4 datasets were unavailable for this property: "
-                f"{failed_names}. See the Extraction Status sheet for API details."
-            )
 
         metric_errors = ga_pay.get("extraction_metadata", {}).get("metric_errors", {})
         if metric_errors:

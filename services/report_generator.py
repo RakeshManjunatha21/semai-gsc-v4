@@ -8,6 +8,7 @@ No Streamlit dependency.
 from __future__ import annotations
 
 import json
+import re
 import time
 
 import numpy as np
@@ -199,6 +200,52 @@ BEGIN COMPARISON REPORT:
     # -----------------------------------------------------------------
 
     @staticmethod
+    def _clean_ga4_report(report: str) -> str:
+        """Remove residual missing-evidence status rows and empty sections."""
+        unavailable_status = re.compile(
+            r"\b(blocked|not available|unavailable|absent|not applicable)\b",
+            re.IGNORECASE,
+        )
+        lines = [
+            line for line in report.splitlines()
+            if not unavailable_status.search(line)
+        ]
+        filtered_lines = []
+        index = 0
+        while index < len(lines):
+            if (
+                index + 1 < len(lines)
+                and lines[index].lstrip().startswith("|")
+                and re.match(r"^\s*\|?[\s:|-]+\|\s*$", lines[index + 1])
+            ):
+                table_end = index + 2
+                while (
+                    table_end < len(lines)
+                    and lines[table_end].lstrip().startswith("|")
+                ):
+                    table_end += 1
+                if table_end == index + 2:
+                    index = table_end
+                    continue
+            filtered_lines.append(lines[index])
+            index += 1
+        lines = filtered_lines
+        cleaned = []
+        for index, line in enumerate(lines):
+            if line.startswith("##"):
+                section_has_content = False
+                for candidate in lines[index + 1:]:
+                    if candidate.startswith("##"):
+                        break
+                    if candidate.strip():
+                        section_has_content = True
+                        break
+                if not section_has_content:
+                    continue
+            cleaned.append(line)
+        return "\n".join(cleaned).strip()
+
+    @staticmethod
     def _ga4_model_payload(payload: dict) -> dict:
         """Return all unique GA4 evidence without duplicated display views."""
         model_payload = {
@@ -235,6 +282,27 @@ BEGIN COMPARISON REPORT:
             if name.startswith("bq_")
         }
         bigquery_rows_present = any(bigquery_datasets.values())
+        extraction_errors = model_payload.get(
+            "extraction_metadata", {}
+        ).get("errors", {})
+        api_funnel_rows = datasets.get("api_funnel_report", [])
+        bigquery_funnel_rows = datasets.get("bq_ordered_funnel", [])
+        uploaded_path_rows = datasets.get("uploaded_path_exploration", [])
+        uploaded_funnel_rows = datasets.get(
+            "uploaded_funnel_exploration", []
+        )
+        api_funnel_error = extraction_errors.get("api_funnel_report")
+        funnel_dataset = (
+            "datasets.uploaded_funnel_exploration"
+            if uploaded_funnel_rows
+            else
+            "datasets.api_funnel_report"
+            if api_funnel_rows or not bigquery_funnel_rows
+            else "datasets.bq_ordered_funnel"
+        )
+        funnel_rows_present = bool(
+            uploaded_funnel_rows or api_funnel_rows or bigquery_funnel_rows
+        )
         key_event_configuration = model_payload.get(
             "key_event_configuration", {}
         )
@@ -245,7 +313,7 @@ BEGIN COMPARISON REPORT:
             "type": "ga4_only",
             "excluded_sources": ["Google Search Console"],
         }
-        model_payload["analysis_input_manifest"] = {
+        analysis_input_manifest = {
             "ga4_key_event_configuration": {
                 "status": (
                     "api_error"
@@ -280,35 +348,75 @@ BEGIN COMPARISON REPORT:
                 "sequential": False,
             },
             "input_12_path_exploration_equivalent": {
-                "dataset": "datasets.bq_form_start_paths",
-                "present": bool(datasets.get("bq_form_start_paths")),
-                "scope": "same-session BigQuery path context",
+                "dataset": (
+                    "datasets.uploaded_path_exploration"
+                    if uploaded_path_rows
+                    else "datasets.bq_form_start_paths"
+                ),
+                "present": bool(
+                    uploaded_path_rows
+                    or datasets.get("bq_form_start_paths")
+                ),
+                "scope": (
+                    "uploaded GA4 Path Exploration output"
+                    if uploaded_path_rows
+                    else "same-session BigQuery path context"
+                ),
                 "authoritative_for_funnel_rates": False,
+                "adjacent_action_dataset": (
+                    "datasets.api_funnel_next_actions"
+                ),
+                "adjacent_action_present": bool(
+                    datasets.get("api_funnel_next_actions")
+                ),
+                "adjacent_action_limitation": (
+                    "The funnel API returns only the first action after each "
+                    "step, not a complete Path Exploration graph."
+                ),
                 "extraction_status": (
-                    "available" if datasets.get("bq_form_start_paths")
+                    "available" if uploaded_path_rows
+                    or datasets.get("bq_form_start_paths")
                     else bigquery_extraction.get("status", "unavailable")
                 ),
                 "unavailable_reason": (
                     bigquery_extraction.get("message")
-                    if not datasets.get("bq_form_start_paths")
+                    if not uploaded_path_rows
+                    and not datasets.get("bq_form_start_paths")
                     else None
                 ),
             },
             "input_13_funnel_exploration_equivalent": {
-                "dataset": "datasets.bq_ordered_funnel",
-                "present": bool(datasets.get("bq_ordered_funnel")),
-                "scope": "same-session timestamp-ordered BigQuery funnel",
+                "dataset": funnel_dataset,
+                "present": funnel_rows_present,
+                "scope": (
+                    "uploaded GA4 Funnel Exploration output"
+                    if uploaded_funnel_rows
+                    else "closed user funnel from GA4 Data API v1alpha"
+                    if api_funnel_rows or not bigquery_funnel_rows
+                    else "same-session timestamp-ordered BigQuery funnel"
+                ),
                 "page_level_segmentation": bool(
-                    datasets.get("bq_ordered_funnel")
+                    bigquery_funnel_rows
+                ),
+                "bigquery_enrichment_dataset": (
+                    "datasets.bq_ordered_funnel"
+                ),
+                "bigquery_enrichment_present": bool(
+                    bigquery_funnel_rows
                 ),
                 "extraction_status": (
-                    "available" if datasets.get("bq_ordered_funnel")
+                    "available" if funnel_rows_present
+                    else "api_error" if api_funnel_error
+                    else "available_no_matching_users"
+                    if "api_funnel_report" in datasets
                     else bigquery_extraction.get("status", "unavailable")
                 ),
                 "unavailable_reason": (
-                    bigquery_extraction.get("message")
-                    if not datasets.get("bq_ordered_funnel")
-                    else None
+                    None if funnel_rows_present
+                    else api_funnel_error
+                    or "The official funnel report returned no matching users."
+                    if "api_funnel_report" in datasets
+                    else bigquery_extraction.get("message")
                 ),
             },
             "input_14_page_event_free_form_equivalent": {
@@ -348,6 +456,41 @@ BEGIN COMPARISON REPORT:
                     if not bigquery_rows_present else None
                 ),
             },
+        }
+        model_payload["analysis_input_manifest"] = {
+            name: details
+            for name, details in analysis_input_manifest.items()
+            if (
+                name == "ga4_key_event_configuration"
+                and bool(key_event_configuration)
+                and details.get("status") != "api_error"
+            )
+            or details.get("present", False)
+        }
+        model_payload["datasets"] = {
+            name: rows for name, rows in datasets.items() if rows
+        }
+        model_payload.pop("bigquery_extraction", None)
+        model_payload.pop("prior_period_extraction", None)
+        extraction_metadata = model_payload.get("extraction_metadata", {})
+        model_payload["extraction_metadata"] = {
+            "dataset_row_counts": {
+                name: counts
+                for name, counts in extraction_metadata.get(
+                    "dataset_row_counts", {}
+                ).items()
+                if name in model_payload["datasets"]
+            },
+            "report_quality": {
+                name: quality
+                for name, quality in extraction_metadata.get(
+                    "report_quality", {}
+                ).items()
+                if name == "summary" or name in model_payload["datasets"]
+            },
+            "reconciliation": extraction_metadata.get(
+                "reconciliation", []
+            ),
         }
         return model_payload
 
@@ -398,31 +541,22 @@ outside this report's scope. Never label them Absent or Blocked. Omit
 branded/non-branded CTR, search-query clustering, ranking, and
 organic-impression conclusions.
 
-STATUS TERMINOLOGY:
-"Blocked" means a requested conclusion cannot be computed from the evidence
-supplied in this run. It does not mean Google blocked the API request unless
-analysis_input_manifest explicitly reports an API or permission error. Every
-Blocked label must include one of these causes and the concrete reason:
-- Missing selection/data: an optional property or dataset was not supplied.
-- No exported rows: the integration exists but returned no usable rows for the
-    selected dates.
-- Configuration required: tracking or a GA4 setting is not configured.
-- External evidence required: the conclusion needs CRM, revenue, target, or
-    manually exported attribution evidence outside the available APIs.
-- API/permission error: only when the extraction status explicitly says error.
-In the input-validation table, use Available, Not available: <exact reason>,
-or Not applicable. Never use the bare status Absent. For inputs 12 and 13,
-state that the app uses the named BigQuery equivalent and include its
-unavailable reason. For input 15, state whether the automatic equal-length
-previous-period extraction returned data. For input 16, report the linked
-BigQuery export status and row counts.
-Use an available BigQuery ordered funnel as the input 13 equivalent and an
-available BigQuery event export as input 16. Do not call either absent when its
-manifest entry says present.
+EVIDENCE-INCLUSION POLICY:
+Use only populated datasets and manifest entries supplied in this run. Omit
+every missing input, unsupported calculation, empty dataset, unavailable
+integration, and inapplicable section without mentioning that it was omitted.
+Never emit availability-status language such as Blocked, Not available,
+Unavailable, Absent, Not applicable, or Unknown. Do not create placeholder
+rows or empty sections. A genuine observed configuration finding, such as no
+configured key events, may still be reported with its measured evidence and a
+specific action. The GA4 Data API funnel is valid input 13 evidence. BigQuery
+may enrich it when populated. Funnel next actions are limited adjacent-action
+evidence and must not be described as a complete Path Exploration.
 
 START YOUR RESPONSE NOW:
 """
-        return self._generate_with_quota_retry(prompt_text)
+        report = self._generate_with_quota_retry(prompt_text)
+        return self._clean_ga4_report(report)
 
     # -----------------------------------------------------------------
     # File Upload Reports

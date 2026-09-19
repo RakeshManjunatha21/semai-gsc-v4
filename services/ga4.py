@@ -7,6 +7,19 @@ No Streamlit dependency.
 
 from __future__ import annotations
 
+from google.analytics.data_v1alpha import AlphaAnalyticsDataClient
+from google.analytics.data_v1alpha.types import (
+    DateRange,
+    Dimension,
+    Funnel,
+    FunnelBreakdown,
+    FunnelEventFilter,
+    FunnelFilterExpression,
+    FunnelNextAction,
+    FunnelStep,
+    RunFunnelReportRequest,
+    RunFunnelReportResponse,
+)
 from googleapiclient.discovery import build
 
 
@@ -695,6 +708,106 @@ def _run_report_resilient(
         )
 
 
+def _funnel_subreport_rows(subreport: dict) -> list[dict]:
+    """Convert a serialized funnel subreport into ordinary row dictionaries."""
+    dimensions = [
+        header.get("name", "")
+        for header in subreport.get("dimension_headers", [])
+    ]
+    metrics = [
+        header.get("name", "")
+        for header in subreport.get("metric_headers", [])
+    ]
+    rows = []
+    for api_row in subreport.get("rows", []):
+        row = {}
+        for index, name in enumerate(dimensions):
+            values = api_row.get("dimension_values", [])
+            row[name] = (
+                values[index].get("value", "")
+                if index < len(values)
+                else ""
+            )
+        for index, name in enumerate(metrics):
+            values = api_row.get("metric_values", [])
+            row[name] = _coerce_metric(
+                values[index].get("value", "0")
+                if index < len(values)
+                else "0"
+            )
+        rows.append(row)
+    return rows
+
+
+def _run_funnel_report(
+    creds,
+    property_name: str,
+    start_date,
+    end_date,
+) -> tuple[list[dict], list[dict], dict]:
+    """Run the official GA4 alpha funnel report for the core form journey."""
+    steps = [
+        ("Session start", "session_start"),
+        ("Form start", "form_start"),
+        ("Form submit", "form_submit"),
+        ("New registration", "new_registration"),
+    ]
+    request = RunFunnelReportRequest(
+        property=property_name,
+        date_ranges=[DateRange(
+            start_date=str(start_date),
+            end_date=str(end_date),
+        )],
+        funnel=Funnel(
+            is_open_funnel=False,
+            steps=[
+                FunnelStep(
+                    name=step_name,
+                    filter_expression=FunnelFilterExpression(
+                        funnel_event_filter=FunnelEventFilter(
+                            event_name=event_name
+                        )
+                    ),
+                )
+                for step_name, event_name in steps
+            ],
+        ),
+        funnel_breakdown=FunnelBreakdown(
+            breakdown_dimension=Dimension(name="deviceCategory"),
+            limit=15,
+        ),
+        funnel_next_action=FunnelNextAction(
+            next_action_dimension=Dimension(name="eventName"),
+            limit=5,
+        ),
+        limit=250_000,
+        return_property_quota=True,
+    )
+    response = AlphaAnalyticsDataClient(
+        credentials=creds
+    ).run_funnel_report(request=request)
+    serialized = RunFunnelReportResponse.to_dict(response)
+    table = serialized.get("funnel_table", {})
+    visualization = serialized.get("funnel_visualization", {})
+    sampling = [
+        *table.get("metadata", {}).get("sampling_metadatas", []),
+        *visualization.get("metadata", {}).get("sampling_metadatas", []),
+    ]
+    return (
+        _funnel_subreport_rows(table),
+        _funnel_subreport_rows(visualization),
+        {
+            "source": "GA4 Data API v1alpha runFunnelReport",
+            "stability": "alpha",
+            "is_open_funnel": False,
+            "steps": [event_name for _, event_name in steps],
+            "breakdown": "deviceCategory",
+            "next_action_dimension": "eventName",
+            "sampling_metadatas": sampling,
+        },
+    )
+
+
 def _extract_ga4_comprehensive(
     creds,
     property_id: str,
@@ -759,6 +872,38 @@ def _extract_ga4_comprehensive(
         except Exception as exc:
             datasets[dataset_name] = []
             extraction_errors[dataset_name] = str(exc)
+            row_counts[dataset_name] = {
+                "api_row_count": 0,
+                "extracted_row_count": 0,
+                "complete": False,
+            }
+
+    try:
+        funnel_rows, funnel_next_actions, funnel_quality = (
+            _run_funnel_report(
+                creds, property_name, start_date, end_date
+            )
+        )
+        datasets["api_funnel_report"] = funnel_rows
+        datasets["api_funnel_next_actions"] = funnel_next_actions
+        report_quality["api_funnel_report"] = funnel_quality
+        row_counts["api_funnel_report"] = {
+            "api_row_count": len(funnel_rows),
+            "extracted_row_count": len(funnel_rows),
+            "complete": True,
+        }
+        row_counts["api_funnel_next_actions"] = {
+            "api_row_count": len(funnel_next_actions),
+            "extracted_row_count": len(funnel_next_actions),
+            "complete": True,
+        }
+    except Exception as exc:
+        datasets["api_funnel_report"] = []
+        datasets["api_funnel_next_actions"] = []
+        extraction_errors["api_funnel_report"] = str(exc)
+        for dataset_name in [
+            "api_funnel_report", "api_funnel_next_actions",
+        ]:
             row_counts[dataset_name] = {
                 "api_row_count": 0,
                 "extracted_row_count": 0,
