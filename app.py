@@ -204,28 +204,31 @@ def handle_callback():
         st.session_state.oauth_flow = None
 
 
-def render_report_clean(report: str):
+def render_report_clean(report: str, container_key: str | None = None):
     """Render a markdown report with custom table handling."""
-    st.markdown('<div class="report-container">', unsafe_allow_html=True)
+    report_container = st.container(key=container_key) if container_key else st
 
-    lines = report.split("\n")
-    i = 0
+    with report_container:
+        st.markdown('<div class="report-container">', unsafe_allow_html=True)
 
-    while i < len(lines):
-        line = lines[i]
+        lines = report.split("\n")
+        i = 0
 
-        # Detect markdown tables
-        if "|" in line and i + 1 < len(lines) and "|" in lines[i + 1]:
-            table_html, new_idx = parse_markdown_table(lines, i)
-            if table_html:
-                st.markdown(table_html, unsafe_allow_html=True)
-                i = new_idx
-                continue
+        while i < len(lines):
+            line = lines[i]
 
-        st.markdown(line)
-        i += 1
+            # Detect markdown tables
+            if "|" in line and i + 1 < len(lines) and "|" in lines[i + 1]:
+                table_html, new_idx = parse_markdown_table(lines, i)
+                if table_html:
+                    st.markdown(table_html, unsafe_allow_html=True)
+                    i = new_idx
+                    continue
 
-    st.markdown("</div>", unsafe_allow_html=True)
+            st.markdown(line)
+            i += 1
+
+        st.markdown("</div>", unsafe_allow_html=True)
 
 
 def render_gsc_source_data(payload: dict, key_prefix: str):
@@ -1119,6 +1122,265 @@ st.markdown("""
         letter-spacing: 0;
     }
 
+    /* GA4 executive report */
+    .ga4-report-header {
+        position: relative;
+        overflow: hidden;
+        background: #172033;
+        color: #FFFFFF;
+        border-left: 5px solid #3B82F6;
+        border-radius: 6px;
+        padding: 1.75rem 2rem;
+        margin: 0 0 1rem;
+    }
+
+    .ga4-report-header::after {
+        content: "";
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: 26%;
+        height: 100%;
+        background: repeating-linear-gradient(
+            135deg,
+            rgba(255, 255, 255, 0.035) 0,
+            rgba(255, 255, 255, 0.035) 1px,
+            transparent 1px,
+            transparent 12px
+        );
+        pointer-events: none;
+    }
+
+    .ga4-report-eyebrow {
+        color: #93C5FD;
+        font-size: 0.75rem;
+        font-weight: 700;
+        margin-bottom: 0.55rem;
+    }
+
+    .ga4-report-header h2 {
+        position: relative;
+        z-index: 1;
+        color: #FFFFFF;
+        font-size: 1.85rem;
+        line-height: 1.2;
+        margin: 0;
+        padding: 0;
+        border: 0;
+    }
+
+    .ga4-report-header p {
+        position: relative;
+        z-index: 1;
+        color: #CBD5E1;
+        font-size: 0.95rem;
+        margin: 0.6rem 0 0;
+    }
+
+    .ga4-report-header + .info-meta {
+        margin-top: 0;
+    }
+
+    .info-meta > div > div {
+        min-width: 0;
+        padding-right: 1rem;
+        border-right: 1px solid #E2E8F0;
+    }
+
+    .info-meta > div > div:last-child {
+        padding-right: 0;
+        border-right: 0;
+    }
+
+    .st-key-ga4-report {
+        margin-top: 2.25rem;
+        padding: 0 0 1.5rem;
+        border-top: 1px solid #CBD5E1;
+        counter-reset: ga4-section;
+    }
+
+    .st-key-ga4-report .report-container {
+        display: none;
+    }
+
+    .st-key-ga4-report [data-testid="stMarkdownContainer"] {
+        max-width: 100%;
+    }
+
+    .st-key-ga4-report h1 {
+        color: #172033;
+        font-size: 1.8rem;
+        line-height: 1.25;
+        margin: 2rem 0 0.75rem;
+        padding: 0 0 0.8rem;
+        border-bottom: 2px solid #172033;
+    }
+
+    .st-key-ga4-report h2 {
+        color: #172033;
+        font-size: 1.4rem;
+        line-height: 1.35;
+        margin: 2.75rem 0 1rem;
+        padding: 0 0 0.7rem 1rem;
+        border-bottom: 1px solid #CBD5E1;
+        border-left: 4px solid #2563EB;
+    }
+
+    .st-key-ga4-report h3 {
+        color: #243047;
+        font-size: 1.12rem;
+        line-height: 1.4;
+        margin: 2rem 0 0.8rem;
+        padding: 0;
+        border: 0;
+    }
+
+    .st-key-ga4-report h4 {
+        color: #334155;
+        font-size: 1rem;
+        margin: 1.5rem 0 0.6rem;
+    }
+
+    .st-key-ga4-report p,
+    .st-key-ga4-report li {
+        color: #3F4B5F;
+        font-size: 0.98rem;
+        line-height: 1.75;
+    }
+
+    .st-key-ga4-report p {
+        margin: 0.65rem 0;
+    }
+
+    .st-key-ga4-report ul,
+    .st-key-ga4-report ol {
+        margin: 0.75rem 0 1.25rem;
+        padding-left: 1.4rem;
+    }
+
+    .st-key-ga4-report li {
+        margin: 0.4rem 0;
+        padding-left: 0.25rem;
+    }
+
+    .st-key-ga4-report li::marker {
+        color: #2563EB;
+        font-weight: 700;
+    }
+
+    .st-key-ga4-report strong {
+        color: #172033;
+        font-weight: 700;
+    }
+
+    .st-key-ga4-report blockquote {
+        background: #F1F5F9;
+        color: #334155;
+        border: 0;
+        border-left: 4px solid #2563EB;
+        border-radius: 0 4px 4px 0;
+        padding: 1rem 1.2rem;
+        margin: 1.25rem 0;
+        font-style: normal;
+    }
+
+    .st-key-ga4-report table,
+    .st-key-ga4-report .markdown-table {
+        width: 100%;
+        margin: 1rem 0 1.75rem;
+        border: 1px solid #CBD5E1;
+        border-radius: 4px;
+        box-shadow: none;
+        font-size: 0.88rem;
+    }
+
+    .st-key-ga4-report th,
+    .st-key-ga4-report .markdown-table th {
+        background: #243047;
+        color: #FFFFFF;
+        padding: 0.8rem 0.85rem;
+        font-size: 0.82rem;
+        line-height: 1.4;
+        vertical-align: bottom;
+    }
+
+    .st-key-ga4-report td,
+    .st-key-ga4-report .markdown-table td {
+        color: #3F4B5F;
+        padding: 0.75rem 0.85rem;
+        border-color: #E2E8F0;
+        line-height: 1.5;
+    }
+
+    .st-key-ga4-report tbody tr:nth-child(even) td,
+    .st-key-ga4-report .markdown-table tbody tr:nth-child(even) td {
+        background: #F8FAFC;
+    }
+
+    .st-key-ga4-report tbody tr:hover td,
+    .st-key-ga4-report .markdown-table tbody tr:hover td {
+        background: #EFF6FF;
+    }
+
+    .st-key-ga4-report code {
+        background: #EEF2F7;
+        color: #9F1239;
+        border-radius: 3px;
+        padding: 0.15rem 0.35rem;
+        font-size: 0.88em;
+    }
+
+    .st-key-ga4-report hr {
+        height: 1px;
+        margin: 2rem 0;
+        background: #CBD5E1;
+    }
+
+    @media (max-width: 768px) {
+        .ga4-report-header {
+            padding: 1.35rem 1.2rem;
+        }
+
+        .ga4-report-header h2 {
+            font-size: 1.5rem;
+        }
+
+        .info-meta > div {
+            grid-template-columns: 1fr !important;
+            gap: 0.85rem !important;
+        }
+
+        .info-meta > div > div {
+            padding: 0 0 0.85rem;
+            border-right: 0;
+            border-bottom: 1px solid #E2E8F0;
+        }
+
+        .info-meta > div > div:last-child {
+            padding-bottom: 0;
+            border-bottom: 0;
+        }
+
+        .st-key-ga4-report h1 {
+            font-size: 1.5rem;
+        }
+
+        .st-key-ga4-report h2 {
+            font-size: 1.22rem;
+            margin-top: 2.25rem;
+            padding-left: 0.75rem;
+        }
+
+        .st-key-ga4-report [data-testid="stMarkdownContainer"] {
+            overflow-x: auto;
+        }
+
+        .st-key-ga4-report table,
+        .st-key-ga4-report .markdown-table {
+            min-width: 680px;
+        }
+    }
+
     [data-testid="stMetric"] {
         background: #FFFFFF;
         border: 1px solid var(--border);
@@ -1758,7 +2020,13 @@ if st.session_state.data_source == "GA":
 
         st.divider()
         st.markdown(
-            "<h2 class='report-title'>GA4 Deep Audit Report</h2>",
+            """
+            <section class="ga4-report-header">
+                <div class="ga4-report-eyebrow">ANALYTICS INTELLIGENCE</div>
+                <h2>GA4 Deep Audit Report</h2>
+                <p>Performance diagnosis, conversion evidence, and prioritized recommendations</p>
+            </section>
+            """,
             unsafe_allow_html=True,
         )
 
@@ -1809,7 +2077,7 @@ if st.session_state.data_source == "GA":
                 st.metric("Total Pageviews", f"{ga_metrics.get('total_pageviews', 0):,}")
 
         st.markdown("")
-        render_report_clean(ga_rpt)
+        render_report_clean(ga_rpt, container_key="ga4-report")
 
         st.markdown("")
 
