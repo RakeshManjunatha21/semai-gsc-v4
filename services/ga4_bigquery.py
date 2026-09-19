@@ -305,6 +305,126 @@ ORDER BY first_seen_in_period
 """
 
 
+def _funnel_query(table_pattern: str) -> str:
+    return _events_cte(table_pattern) + """
+, session_base AS (
+  SELECT
+    user_pseudo_id,
+    ga_session_id,
+    ARRAY_AGG(IF(event_name = 'page_view', page_location, NULL)
+      IGNORE NULLS ORDER BY event_timestamp LIMIT 1)[SAFE_OFFSET(0)]
+      AS landing_page,
+    ARRAY_AGG(device_category IGNORE NULLS ORDER BY event_timestamp LIMIT 1)
+      [SAFE_OFFSET(0)] AS device_category,
+    IF(COUNTIF(event_name IN ('first_visit', 'first_open')) > 0,
+      'new', 'returning') AS visitor_type,
+    MIN(IF(event_name = 'session_start', event_timestamp, NULL))
+      AS session_start_ts,
+    MIN(IF(event_name = 'form_start', event_timestamp, NULL))
+      AS first_form_start_ts
+  FROM source_events
+  WHERE user_pseudo_id IS NOT NULL AND ga_session_id IS NOT NULL
+  GROUP BY user_pseudo_id, ga_session_id
+), ordered_submits AS (
+  SELECT
+    session_base.*,
+    MIN(IF(
+      event_name = 'form_submit'
+      AND event_timestamp >= first_form_start_ts,
+      event_timestamp,
+      NULL
+    )) AS first_form_submit_ts
+  FROM session_base
+  JOIN source_events USING (user_pseudo_id, ga_session_id)
+  GROUP BY
+    user_pseudo_id, ga_session_id, landing_page, device_category,
+    visitor_type, session_start_ts, first_form_start_ts
+), ordered_funnel AS (
+  SELECT
+    ordered_submits.*,
+    MIN(IF(
+      event_name = 'new_registration'
+      AND event_timestamp >= first_form_submit_ts,
+      event_timestamp,
+      NULL
+    )) AS first_registration_ts
+  FROM ordered_submits
+  JOIN source_events USING (user_pseudo_id, ga_session_id)
+  GROUP BY
+    user_pseudo_id, ga_session_id, landing_page, device_category,
+    visitor_type, session_start_ts, first_form_start_ts,
+    first_form_submit_ts
+)
+SELECT
+  COALESCE(landing_page, '(not set)') AS landing_page,
+  COALESCE(device_category, '(not set)') AS device_category,
+  visitor_type,
+  COUNTIF(session_start_ts IS NOT NULL) AS session_start_sessions,
+  COUNTIF(first_form_start_ts >= session_start_ts) AS form_start_sessions,
+  COUNTIF(first_form_submit_ts IS NOT NULL) AS form_submit_sessions,
+  COUNTIF(first_registration_ts IS NOT NULL) AS new_registration_sessions,
+  SAFE_DIVIDE(
+    COUNTIF(first_form_start_ts >= session_start_ts),
+    COUNTIF(session_start_ts IS NOT NULL)
+  ) AS session_to_form_start_rate,
+  SAFE_DIVIDE(
+    COUNTIF(first_form_submit_ts IS NOT NULL),
+    COUNTIF(first_form_start_ts >= session_start_ts)
+  ) AS form_start_to_submit_rate,
+  SAFE_DIVIDE(
+    COUNTIF(first_registration_ts IS NOT NULL),
+    COUNTIF(first_form_submit_ts IS NOT NULL)
+  ) AS form_submit_to_registration_rate
+FROM ordered_funnel
+GROUP BY landing_page, device_category, visitor_type
+HAVING session_start_sessions > 0
+ORDER BY session_start_sessions DESC
+"""
+
+
+def _form_paths_query(table_pattern: str) -> str:
+    return _events_cte(table_pattern) + """
+, path_nodes AS (
+  SELECT
+    user_pseudo_id,
+    ga_session_id,
+    event_timestamp,
+    event_name,
+    page_location,
+    LAG(page_location) OVER (
+      PARTITION BY user_pseudo_id, ga_session_id ORDER BY event_timestamp
+    ) AS preceding_page,
+    LEAD(page_location) OVER (
+      PARTITION BY user_pseudo_id, ga_session_id ORDER BY event_timestamp
+    ) AS following_page
+  FROM source_events
+  WHERE event_name = 'page_view' OR event_name = 'form_start'
+)
+SELECT
+  'preceding' AS direction,
+  COALESCE(preceding_page, '(not set)') AS page_location,
+  COUNT(*) AS occurrences,
+  COUNT(DISTINCT user_pseudo_id) AS users,
+  COUNT(DISTINCT CONCAT(user_pseudo_id, '.', CAST(ga_session_id AS STRING)))
+    AS sessions
+FROM path_nodes
+WHERE event_name = 'form_start'
+GROUP BY page_location
+UNION ALL
+SELECT
+  'following' AS direction,
+  COALESCE(following_page, '(not set)') AS page_location,
+  COUNT(*) AS occurrences,
+  COUNT(DISTINCT user_pseudo_id) AS users,
+  COUNT(DISTINCT CONCAT(user_pseudo_id, '.', CAST(ga_session_id AS STRING)))
+    AS sessions
+FROM path_nodes
+WHERE event_name = 'form_start'
+GROUP BY page_location
+ORDER BY direction, occurrences DESC
+"""
+
+
 def _inventory_tables(client, project_id: str, dataset_id: str) -> list[str]:
     from google.api_core.exceptions import NotFound
 
@@ -414,6 +534,12 @@ def extract_bigquery_payload(
         "bq_users": _query_rows(
             client, _users_query(table_pattern), parameters
         ),
+        "bq_ordered_funnel": _query_rows(
+          client, _funnel_query(table_pattern), parameters
+        ),
+        "bq_form_start_paths": _query_rows(
+          client, _form_paths_query(table_pattern), parameters
+        ),
     }
 
     return {
@@ -430,6 +556,24 @@ def extract_bigquery_payload(
             "available_start": available_start,
             "available_end": available_end,
             "key_event_names": key_event_names,
+            "funnel_configuration": {
+              "scope": "same session",
+              "funnel_type": "closed",
+              "step_order": "direct or indirect, timestamp ordered",
+              "maximum_time_between_steps": "session boundary",
+              "steps": [
+                "session_start", "form_start", "form_submit",
+                "new_registration",
+              ],
+              "breakdowns": [
+                "landing_page", "device_category", "visitor_type",
+              ],
+              "breakdown_attribution": (
+                "Landing page and device use the first applicable value "
+                "in the session."
+              ),
+              "page_level_segmentation": True,
+            },
             "row_counts": {
                 name: len(rows) for name, rows in datasets.items()
             },

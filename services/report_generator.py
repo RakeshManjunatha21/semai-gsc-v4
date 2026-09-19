@@ -217,6 +217,46 @@ BEGIN COMPARISON REPORT:
             "devices": "datasets.devices",
             "countries": "datasets.countries",
         }
+        datasets = model_payload.get("datasets", {})
+        model_payload["analysis_input_manifest"] = {
+            "input_7_events_report": {
+                "dataset": "datasets.events",
+                "present": bool(datasets.get("events")),
+                "sequential": False,
+            },
+            "input_12_path_exploration_equivalent": {
+                "dataset": "datasets.bq_form_start_paths",
+                "present": bool(datasets.get("bq_form_start_paths")),
+                "scope": "same-session BigQuery path context",
+                "authoritative_for_funnel_rates": False,
+            },
+            "input_13_funnel_exploration_equivalent": {
+                "dataset": "datasets.bq_ordered_funnel",
+                "present": bool(datasets.get("bq_ordered_funnel")),
+                "scope": "same-session timestamp-ordered BigQuery funnel",
+                "page_level_segmentation": bool(
+                    datasets.get("bq_ordered_funnel")
+                ),
+            },
+            "input_14_page_event_free_form_equivalent": {
+                "dataset": "datasets.page_event_matrix",
+                "present": bool(datasets.get("page_event_matrix")),
+                "sequential": False,
+                "diagnostic_only": True,
+            },
+            "device_visitor_event_diagnostic": {
+                "dataset": "datasets.funnel_event_segments",
+                "present": bool(datasets.get("funnel_event_segments")),
+                "sequential": False,
+                "diagnostic_only": True,
+            },
+            "input_16_bigquery_event_export": {
+                "datasets": [
+                    name for name in datasets if name.startswith("bq_")
+                ],
+                "present": any(name.startswith("bq_") for name in datasets),
+            },
+        }
         return model_payload
 
     def _generate_with_quota_retry(self, prompt_text: str) -> str:

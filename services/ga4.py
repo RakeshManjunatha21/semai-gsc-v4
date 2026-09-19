@@ -67,6 +67,16 @@ _REPORT_DEFINITIONS = {
             "keyEvents",
         ],
     },
+    "page_event_matrix": {
+        "dimensions": ["pagePath", "eventName"],
+        "metrics": ["eventCount", "totalUsers", "keyEvents"],
+    },
+    "funnel_event_segments": {
+        "dimensions": [
+            "eventName", "deviceCategory", "newVsReturning",
+        ],
+        "metrics": ["eventCount", "totalUsers", "keyEvents"],
+    },
     "devices": {
         "dimensions": [
             "deviceCategory", "operatingSystem", "browser", "platform",

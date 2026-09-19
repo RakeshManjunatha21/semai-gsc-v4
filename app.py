@@ -296,11 +296,13 @@ def render_ga4_source_data(payload: dict, key_prefix: str):
             key=f"{key_prefix}_source_json_dl",
         )
 
-        tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
             "Summary",
             "Channels",
             "Top Pages",
             "Countries",
+            "Page × Event",
+            "Funnel Segments",
             "Raw JSON",
         ])
 
@@ -342,7 +344,53 @@ def render_ga4_source_data(payload: dict, key_prefix: str):
             else:
                 st.info("No country source rows available.")
 
+        datasets = payload.get("datasets", {})
+
         with tab5:
+            page_events_df = pd.DataFrame(
+                datasets.get("page_event_matrix", [])
+            )
+            if not page_events_df.empty:
+                st.caption(
+                    "Diagnostic event counts by page. This table does not "
+                    "prove session-scoped event order."
+                )
+                st.dataframe(
+                    page_events_df, use_container_width=True, height=420
+                )
+            else:
+                st.info("No page × event source rows available.")
+
+        with tab6:
+            ordered_funnel_df = pd.DataFrame(
+                datasets.get("bq_ordered_funnel", [])
+            )
+            if not ordered_funnel_df.empty:
+                st.markdown("#### Same-Session Ordered Funnel")
+                st.caption(
+                    "BigQuery event sequence, broken down by landing page, "
+                    "device category, and visitor type."
+                )
+                st.dataframe(
+                    ordered_funnel_df, use_container_width=True, height=320
+                )
+
+            funnel_segments_df = pd.DataFrame(
+                datasets.get("funnel_event_segments", [])
+            )
+            if not funnel_segments_df.empty:
+                st.markdown("#### Aggregate Event Segments")
+                st.caption(
+                    "Event counts by device and new/returning visitor. "
+                    "These rows are diagnostic and not a sequential funnel."
+                )
+                st.dataframe(
+                    funnel_segments_df, use_container_width=True, height=320
+                )
+            elif ordered_funnel_df.empty:
+                st.info("No funnel segment source rows available.")
+
+        with tab7:
             st.json(payload)
 
 
