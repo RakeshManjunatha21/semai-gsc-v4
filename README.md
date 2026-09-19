@@ -50,6 +50,13 @@ A comprehensive Google Search Console analytics platform that generates AI-power
 - **JSON**: Raw GSC data export
 - **Excel (.xlsx)**: Multi-sheet workbooks with queries, pages, and metrics
 
+### GA4 BigQuery Event Export
+- Automatically detects a BigQuery link for the selected GA4 property
+- Reads every completed daily event table in the selected date range
+- Reconstructs sessions, key events, page performance, and user summaries
+- Adds each transformed dataset to the GA4 Excel download
+- Falls back to the complete paginated GA4 Data API extraction when BigQuery is unavailable
+
 ### 🔧 **Admin Dashboard**
 - Separate `/admin` route
 - Password-protected access
@@ -146,12 +153,27 @@ Use this flow when you want deployment without pushing tokens or credential file
    - Google Search Console API
    - Google Analytics Data API
    - Google Analytics Admin API
+       - BigQuery API
 
 ### 5. Deploy and test
 - Redeploy the app.
 - Click **Sign in with Google**.
 - Grant requested scopes.
 - Run a Deep Audit report to verify LLM + Google APIs.
+
+### GA4 BigQuery permissions
+
+For event-level GA4 extraction, link the property under **GA4 Admin > Product
+Links > BigQuery Links** and enable Daily Export. Each signed-in user must have
+these IAM roles on the linked Google Cloud project:
+
+- **BigQuery Data Viewer** on the `analytics_<property_id>` dataset
+- **BigQuery Job User** on the linked project
+
+After adding these permissions or upgrading from an older application version,
+sign out and sign in again to grant the BigQuery OAuth scope. BigQuery export
+does not backfill dates from before the GA4-to-BigQuery link was created; the
+application continues to use the Data API for aggregate coverage of those dates.
 
 ### Notes for cloud token behavior
 - Streamlit Cloud filesystem is ephemeral.

@@ -8,6 +8,7 @@ No Streamlit dependency.
 from __future__ import annotations
 
 import json
+import time
 
 import numpy as np
 import pandas as pd
@@ -197,6 +198,40 @@ BEGIN COMPARISON REPORT:
     # GA4 Reports
     # -----------------------------------------------------------------
 
+    @staticmethod
+    def _ga4_model_payload(payload: dict) -> dict:
+        """Return all unique GA4 evidence without duplicated display views."""
+        model_payload = {
+            key: value
+            for key, value in payload.items()
+            if key not in {
+                "channel_performance",
+                "top_pages",
+                "device_breakdown",
+                "country_performance",
+            }
+        }
+        model_payload["report_view_mappings"] = {
+            "channels": "datasets.traffic_acquisition",
+            "pages": "datasets.pages_and_screens",
+            "devices": "datasets.devices",
+            "countries": "datasets.countries",
+        }
+        return model_payload
+
+    def _generate_with_quota_retry(self, prompt_text: str) -> str:
+        """Retry one transient Gemini per-minute quota response."""
+        try:
+            return self._model.generate_content(prompt_text).text
+        except Exception as exc:
+            if exc.__class__.__name__ != "ResourceExhausted":
+                raise
+
+            retry_delay = getattr(exc, "retry_delay", None)
+            retry_seconds = getattr(retry_delay, "seconds", None) or 10
+            time.sleep(min(max(float(retry_seconds), 1), 15))
+            return self._model.generate_content(prompt_text).text
+
     def generate_ga4_deep_audit(self, payload: dict) -> str:
         """Generate a GA4 Deep Audit Report.
 
@@ -207,22 +242,25 @@ BEGIN COMPARISON REPORT:
         Returns:
             Markdown report string.
         """
+        model_payload = self._ga4_model_payload(payload)
         prompt_text = f"""
 {GA4_AUDIT_PROMPT}
 
 --- ACTUAL GA4 DATA TO ANALYZE ---
 
-{json.dumps(payload, indent=2)}
+    {json.dumps(model_payload, separators=(",", ":"))}
 
 --- BEGIN ANALYSIS NOW ---
 
 Analyze the GA4 data above and generate the complete executive report immediately.
 If the data shows an error or has minimal metrics, provide the empty data guidance.
 Otherwise, generate all sections of the GA4 Deep Audit Report following the template structure.
+Include a country-wise performance analysis using datasets.countries, covering
+traffic, engagement, key events, and revenue without inventing unavailable values.
 
 START YOUR RESPONSE NOW:
 """
-        return self._model.generate_content(prompt_text).text
+        return self._generate_with_quota_retry(prompt_text)
 
     # -----------------------------------------------------------------
     # File Upload Reports

@@ -23,6 +23,74 @@ except ImportError:
     DOCX_AVAILABLE = False
 
 
+_EXCEL_MAX_DATA_ROWS = 1_048_575
+
+
+def create_ga4_excel_export(payload: dict) -> BytesIO:
+    """Build an Excel workbook containing every extracted GA4 dataset."""
+    buffer = BytesIO()
+    metadata = payload.get("extraction_metadata", {})
+    row_counts = metadata.get("dataset_row_counts", {})
+    errors = metadata.get("errors", {})
+    metric_errors = metadata.get("metric_errors", {})
+
+    with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+        overview = {
+            "property_id": payload.get("property_id", ""),
+            "start_date": payload.get("date_range", {}).get("start", ""),
+            "end_date": payload.get("date_range", {}).get("end", ""),
+            **payload.get("summary_metrics", {}),
+        }
+        pd.DataFrame([overview]).to_excel(
+            writer, sheet_name="Summary", index=False
+        )
+
+        status_rows = []
+        for dataset_name, counts in row_counts.items():
+            status_rows.append(
+                {
+                    "dataset": dataset_name,
+                    "api_row_count": counts.get("api_row_count", 0),
+                    "extracted_row_count": counts.get(
+                        "extracted_row_count", 0
+                    ),
+                    "complete": counts.get("complete", False),
+                    "error": errors.get(dataset_name, ""),
+                    "omitted_metrics": ", ".join(
+                        sorted(metric_errors.get(dataset_name, {}))
+                    ),
+                }
+            )
+        pd.DataFrame(status_rows).to_excel(
+            writer, sheet_name="Extraction Status", index=False
+        )
+
+        used_sheet_names = {"Summary", "Extraction Status"}
+        for dataset_name, rows in payload.get("datasets", {}).items():
+            dataframe = pd.DataFrame(rows)
+            chunks = max(1, (len(dataframe) + _EXCEL_MAX_DATA_ROWS - 1)
+                         // _EXCEL_MAX_DATA_ROWS)
+            for chunk_index in range(chunks):
+                suffix = f"_{chunk_index + 1}" if chunks > 1 else ""
+                base_name = f"{dataset_name}{suffix}"[:31]
+                sheet_name = base_name
+                duplicate_index = 2
+                while sheet_name in used_sheet_names:
+                    marker = f"_{duplicate_index}"
+                    sheet_name = f"{base_name[:31 - len(marker)]}{marker}"
+                    duplicate_index += 1
+                used_sheet_names.add(sheet_name)
+
+                start = chunk_index * _EXCEL_MAX_DATA_ROWS
+                end = start + _EXCEL_MAX_DATA_ROWS
+                dataframe.iloc[start:end].to_excel(
+                    writer, sheet_name=sheet_name, index=False
+                )
+
+    buffer.seek(0)
+    return buffer
+
+
 # =============================================================================
 # Markdown → HTML table parser (used by the Streamlit renderer)
 # =============================================================================

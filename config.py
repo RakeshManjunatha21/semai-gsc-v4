@@ -41,6 +41,7 @@ SCOPES = [
     "https://www.googleapis.com/auth/userinfo.email",
     "https://www.googleapis.com/auth/analytics.readonly",
     "https://www.googleapis.com/auth/analytics.edit",
+    "https://www.googleapis.com/auth/bigquery",
     "openid",
 ]
 
@@ -67,9 +68,12 @@ def resolve_redirect_uri() -> str:
                 forwarded_proto = (
                     headers.get("X-Forwarded-Proto")
                     or headers.get("x-forwarded-proto")
-                    or "https"
                 )
-                return f"{forwarded_proto}://{host}".rstrip("/")
+                local_host = host.split(":", 1)[0] in {
+                    "localhost", "127.0.0.1", "[::1]"
+                }
+                scheme = forwarded_proto or ("http" if local_host else "https")
+                return f"{scheme}://{host}".rstrip("/")
     except Exception:
         pass
 

@@ -39,6 +39,7 @@ from services.gsc import (
 )
 from services.report_generator import ReportGenerator
 from services.export import (
+    create_ga4_excel_export,
     create_word_document,
     parse_markdown_table,
     process_uploaded_files,
@@ -295,10 +296,11 @@ def render_ga4_source_data(payload: dict, key_prefix: str):
             key=f"{key_prefix}_source_json_dl",
         )
 
-        tab1, tab2, tab3, tab4 = st.tabs([
+        tab1, tab2, tab3, tab4, tab5 = st.tabs([
             "Summary",
             "Channels",
             "Top Pages",
+            "Countries",
             "Raw JSON",
         ])
 
@@ -334,6 +336,13 @@ def render_ga4_source_data(payload: dict, key_prefix: str):
                 st.info("No page source rows available.")
 
         with tab4:
+            countries_df = pd.DataFrame(payload.get("country_performance", []))
+            if not countries_df.empty:
+                st.dataframe(countries_df, use_container_width=True, height=350)
+            else:
+                st.info("No country source rows available.")
+
+        with tab5:
             st.json(payload)
 
 
@@ -1333,6 +1342,45 @@ if st.session_state.data_source == "GA":
             st.error(f"❌ Error fetching GA4 data: {ga_payload.get('error')}")
             st.stop()
 
+        try:
+            from services.ga4_bigquery import (
+                BigQueryExportUnavailable,
+                enrich_payload_with_bigquery,
+                extract_bigquery_payload,
+            )
+
+            with st.spinner(
+                "🔎 Checking for a linked GA4 BigQuery event export..."
+            ):
+                bigquery_payload = extract_bigquery_payload(
+                    creds,
+                    ga_property_id,
+                    ga_start_date,
+                    ga_end_date,
+                )
+            ga_payload = enrich_payload_with_bigquery(
+                ga_payload, bigquery_payload
+            )
+            bq_metadata = bigquery_payload.get("metadata", {})
+            bq_counts = bq_metadata.get("row_counts", {})
+            st.success(
+                "✅ BigQuery event export included: "
+                f"{sum(bq_counts.values()):,} transformed rows across "
+                f"{len(bq_counts)} datasets."
+            )
+        except BigQueryExportUnavailable as exc:
+            ga_payload["data_source"] = "GA4 Data API"
+            ga_payload["bigquery_extraction"] = {
+                "status": "unavailable",
+                "message": str(exc),
+            }
+        except Exception as exc:
+            ga_payload["data_source"] = "GA4 Data API"
+            ga_payload["bigquery_extraction"] = {
+                "status": "error",
+                "message": str(exc),
+            }
+
         # Check for empty GA4 data (all summary metrics are zero)
         ga_summary = ga_payload.get("summary_metrics", {})
         if (
@@ -1344,7 +1392,16 @@ if st.session_state.data_source == "GA":
             st.stop()
 
         with st.spinner("🤖 Generating GA4 Deep Audit Report with SEMAI AI..."):
-            ga_report = report_gen.generate_ga4_deep_audit(ga_payload)
+            try:
+                ga_report = report_gen.generate_ga4_deep_audit(ga_payload)
+            except Exception as exc:
+                if exc.__class__.__name__ != "ResourceExhausted":
+                    raise
+                st.error(
+                    "Gemini's per-minute input quota is temporarily exhausted. "
+                    "Please wait about a minute, then generate the report again."
+                )
+                st.stop()
 
         st.session_state.ga4_report = ga_report
         st.session_state.ga4_property_name = selected_ga_property
@@ -1388,6 +1445,9 @@ if st.session_state.data_source == "GA":
         """, unsafe_allow_html=True)
 
         ga_metrics = ga_pay.get("summary_metrics", {})
+        st.caption(
+            f"Data source: {ga_pay.get('data_source', 'GA4 Data API')}"
+        )
         if ga_metrics:
             st.markdown("### 📊 Quick Metrics Overview")
             metric_cols = st.columns(4)
@@ -1453,6 +1513,34 @@ if st.session_state.data_source == "GA":
                     key="ga4_md_dl_fallback",
                 )
                 st.info("💡 Install python-docx for Word document export: pip install python-docx")
+
+        st.markdown("")
+        ga4_excel = create_ga4_excel_export(ga_pay)
+        st.download_button(
+            "📊 Download Complete Raw GA4 Extract (Excel)",
+            ga4_excel,
+            f"ga4_raw_extract_{ga_s.strftime('%Y%m%d')}_{ga_e.strftime('%Y%m%d')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True,
+            key="ga4_raw_excel_dl",
+        )
+
+        extraction_errors = ga_pay.get("extraction_metadata", {}).get("errors", {})
+        if extraction_errors:
+            failed_names = ", ".join(sorted(extraction_errors))
+            st.warning(
+                "Some optional GA4 datasets were unavailable for this property: "
+                f"{failed_names}. See the Extraction Status sheet for API details."
+            )
+
+        metric_errors = ga_pay.get("extraction_metadata", {}).get("metric_errors", {})
+        if metric_errors:
+            partial_names = ", ".join(sorted(metric_errors))
+            st.warning(
+                "Google rejected some metrics for these report surfaces: "
+                f"{partial_names}. Compatible metrics were still extracted; "
+                "see the Extraction Status sheet for omitted metric names."
+            )
 
         st.markdown("")
         if st.button("🗑️ Clear GA4 Report & Start New Analysis", use_container_width=False, key="clear_ga4_report"):

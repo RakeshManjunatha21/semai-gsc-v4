@@ -10,6 +10,111 @@ from __future__ import annotations
 from googleapiclient.discovery import build
 
 
+_PAGE_SIZE = 100_000
+
+# Each report is deliberately kept to a compatible GA4 reporting surface.
+# A failure in an optional report is recorded without losing other datasets.
+_REPORT_DEFINITIONS = {
+    "daily_overview": {
+        "dimensions": ["date"],
+        "metrics": [
+            "sessions", "totalUsers", "activeUsers", "newUsers",
+            "engagedSessions", "engagementRate", "bounceRate",
+            "averageSessionDuration", "screenPageViews", "eventCount",
+            "keyEvents", "totalRevenue",
+        ],
+    },
+    "traffic_acquisition": {
+        "dimensions": [
+            "sessionDefaultChannelGroup", "sessionSource",
+            "sessionMedium", "sessionCampaignName",
+        ],
+        "metrics": [
+            "sessions", "totalUsers", "newUsers", "engagedSessions",
+            "engagementRate", "bounceRate", "eventCount", "keyEvents",
+            "totalRevenue",
+        ],
+    },
+    "user_acquisition": {
+        "dimensions": [
+            "firstUserDefaultChannelGroup", "firstUserSource",
+            "firstUserMedium", "firstUserCampaignName",
+        ],
+        "metrics": [
+            "totalUsers", "newUsers", "engagedSessions", "engagementRate",
+            "eventCount", "keyEvents", "totalRevenue",
+        ],
+    },
+    "landing_pages": {
+        "dimensions": ["landingPagePlusQueryString"],
+        "metrics": [
+            "sessions", "totalUsers", "newUsers", "engagedSessions",
+            "engagementRate", "bounceRate", "averageSessionDuration",
+            "screenPageViews", "eventCount", "keyEvents", "totalRevenue",
+        ],
+    },
+    "pages_and_screens": {
+        "dimensions": ["pagePath", "pageTitle"],
+        "metrics": [
+            "screenPageViews", "activeUsers", "sessions", "eventCount",
+            "keyEvents", "userEngagementDuration",
+        ],
+    },
+    "events": {
+        "dimensions": ["eventName"],
+        "metrics": [
+            "eventCount", "totalUsers", "eventCountPerUser", "eventValue",
+            "keyEvents",
+        ],
+    },
+    "devices": {
+        "dimensions": [
+            "deviceCategory", "operatingSystem", "browser", "platform",
+        ],
+        "metrics": [
+            "sessions", "totalUsers", "newUsers", "engagementRate",
+            "bounceRate", "eventCount", "keyEvents", "totalRevenue",
+        ],
+    },
+    "countries": {
+        "dimensions": ["country"],
+        "metrics": [
+            "sessions", "totalUsers", "activeUsers", "newUsers",
+            "engagedSessions", "engagementRate", "bounceRate",
+            "averageSessionDuration", "screenPageViews", "eventCount",
+            "keyEvents", "totalRevenue",
+        ],
+    },
+    "geography": {
+        "dimensions": ["country", "region", "city"],
+        "metrics": [
+            "sessions", "totalUsers", "newUsers", "engagementRate",
+            "eventCount", "keyEvents", "totalRevenue",
+        ],
+    },
+    "demographics": {
+        "dimensions": ["userAgeBracket", "userGender"],
+        "metrics": [
+            "sessions", "totalUsers", "newUsers", "engagementRate",
+            "eventCount", "keyEvents", "totalRevenue",
+        ],
+    },
+    "ecommerce_items": {
+        "dimensions": ["itemName", "itemCategory", "itemBrand"],
+        "metrics": [
+            "itemsViewed", "itemsAddedToCart", "itemsPurchased",
+            "itemRevenue",
+        ],
+    },
+    "ecommerce_transactions": {
+        "dimensions": ["date", "transactionId"],
+        "metrics": [
+            "purchaseRevenue", "ecommercePurchases",
+        ],
+    },
+}
+
+
 # =============================================================================
 # Public API
 # =============================================================================
@@ -380,6 +485,278 @@ def _extract_ga4_rest(creds, property_id: str, start_date, end_date) -> dict:
     )
 
 
+def _coerce_metric(value: str):
+    """Convert a Data API metric string to a number when possible."""
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return value
+    return int(number) if number.is_integer() else number
+
+
+def _run_report_all_rows(
+    service,
+    property_name: str,
+    start_date,
+    end_date,
+    dimensions: list[str],
+    metrics: list[str],
+) -> tuple[list[dict], int]:
+    """Run one GA4 report and paginate until every available row is read."""
+    rows: list[dict] = []
+    offset = 0
+    reported_row_count = 0
+
+    while True:
+        body = {
+            "dateRanges": [
+                {"startDate": str(start_date), "endDate": str(end_date)}
+            ],
+            "dimensions": [{"name": name} for name in dimensions],
+            "metrics": [{"name": name} for name in metrics],
+            "limit": _PAGE_SIZE,
+            "offset": offset,
+            "keepEmptyRows": True,
+        }
+        response = (
+            service.properties()
+            .runReport(property=property_name, body=body)
+            .execute()
+        )
+        page_rows = response.get("rows", [])
+        reported_row_count = int(response.get("rowCount", len(page_rows)))
+
+        for api_row in page_rows:
+            row = {}
+            dimension_values = api_row.get("dimensionValues", [])
+            metric_values = api_row.get("metricValues", [])
+            for index, name in enumerate(dimensions):
+                row[name] = (
+                    dimension_values[index].get("value", "")
+                    if index < len(dimension_values)
+                    else ""
+                )
+            for index, name in enumerate(metrics):
+                raw_value = (
+                    metric_values[index].get("value", "0")
+                    if index < len(metric_values)
+                    else "0"
+                )
+                row[name] = _coerce_metric(raw_value)
+            rows.append(row)
+
+        offset += len(page_rows)
+        if not page_rows or offset >= reported_row_count:
+            break
+
+    return rows, reported_row_count
+
+
+def _run_report_resilient(
+    service,
+    property_name: str,
+    start_date,
+    end_date,
+    dimensions: list[str],
+    metrics: list[str],
+) -> tuple[list[dict], int, dict[str, str]]:
+    """Run a report, recovering compatible metrics if the full set fails."""
+    try:
+        rows, row_count = _run_report_all_rows(
+            service,
+            property_name,
+            start_date,
+            end_date,
+            dimensions,
+            metrics,
+        )
+        return rows, row_count, {}
+    except Exception as combined_error:
+        merged_rows: dict[tuple, dict] = {}
+        metric_errors: dict[str, str] = {}
+        largest_row_count = 0
+
+        for metric in metrics:
+            try:
+                rows, row_count = _run_report_all_rows(
+                    service,
+                    property_name,
+                    start_date,
+                    end_date,
+                    dimensions,
+                    [metric],
+                )
+                largest_row_count = max(largest_row_count, row_count)
+                for row in rows:
+                    key = tuple(row.get(name, "") for name in dimensions)
+                    merged_rows.setdefault(
+                        key, {name: row.get(name, "") for name in dimensions}
+                    ).update({metric: row.get(metric, 0)})
+            except Exception as metric_error:
+                metric_errors[metric] = str(metric_error)
+
+        if len(metric_errors) == len(metrics):
+            raise RuntimeError(str(combined_error)) from combined_error
+
+        return list(merged_rows.values()), largest_row_count, metric_errors
+
+
+def _extract_ga4_comprehensive(
+    creds,
+    property_id: str,
+    start_date,
+    end_date,
+) -> dict:
+    """Extract complete paginated rows across standard GA4 report surfaces."""
+    service = build("analyticsdata", "v1beta", credentials=creds)
+    property_name = f"properties/{property_id}"
+
+    summary_rows, summary_count, summary_metric_errors = _run_report_resilient(
+        service,
+        property_name,
+        start_date,
+        end_date,
+        [],
+        [
+            "sessions", "totalUsers", "newUsers", "engagementRate",
+            "averageSessionDuration", "bounceRate", "screenPageViews",
+            "keyEvents", "eventCount", "totalRevenue",
+        ],
+    )
+    summary_metrics = summary_rows[0] if summary_rows else {}
+
+    datasets: dict[str, list[dict]] = {}
+    extraction_errors: dict[str, str] = {}
+    metric_errors: dict[str, dict[str, str]] = {}
+    row_counts: dict[str, dict[str, int | bool]] = {}
+
+    for dataset_name, definition in _REPORT_DEFINITIONS.items():
+        try:
+            rows, api_row_count, omitted_metrics = _run_report_resilient(
+                service,
+                property_name,
+                start_date,
+                end_date,
+                definition["dimensions"],
+                definition["metrics"],
+            )
+            datasets[dataset_name] = rows
+            if omitted_metrics:
+                metric_errors[dataset_name] = omitted_metrics
+            row_counts[dataset_name] = {
+                "api_row_count": api_row_count,
+                "extracted_row_count": len(rows),
+                "complete": (
+                    len(rows) == api_row_count and not omitted_metrics
+                ),
+            }
+        except Exception as exc:
+            datasets[dataset_name] = []
+            extraction_errors[dataset_name] = str(exc)
+            row_counts[dataset_name] = {
+                "api_row_count": 0,
+                "extracted_row_count": 0,
+                "complete": False,
+            }
+
+    channels = [
+        {
+            "channel": row.get("sessionDefaultChannelGroup", ""),
+            "source": row.get("sessionSource", ""),
+            "medium": row.get("sessionMedium", ""),
+            "campaign": row.get("sessionCampaignName", ""),
+            "sessions": int(row.get("sessions", 0)),
+            "users": int(row.get("totalUsers", 0)),
+            "engagement_rate": row.get("engagementRate", 0),
+            "conversions": int(row.get("keyEvents", 0)),
+            "revenue": row.get("totalRevenue", 0),
+        }
+        for row in datasets.get("traffic_acquisition", [])
+    ]
+    pages = [
+        {
+            "page": row.get("pagePath", ""),
+            "title": row.get("pageTitle", ""),
+            "pageviews": int(row.get("screenPageViews", 0)),
+            "sessions": int(row.get("sessions", 0)),
+            "users": int(row.get("activeUsers", 0)),
+            "events": int(row.get("eventCount", 0)),
+            "conversions": int(row.get("keyEvents", 0)),
+            "engagement_seconds": row.get("userEngagementDuration", 0),
+        }
+        for row in datasets.get("pages_and_screens", [])
+    ]
+    devices = [
+        {
+            "device": row.get("deviceCategory", ""),
+            "operating_system": row.get("operatingSystem", ""),
+            "browser": row.get("browser", ""),
+            "platform": row.get("platform", ""),
+            "sessions": int(row.get("sessions", 0)),
+            "users": int(row.get("totalUsers", 0)),
+            "engagement_rate": row.get("engagementRate", 0),
+        }
+        for row in datasets.get("devices", [])
+    ]
+    countries = [
+        {
+            "country": row.get("country", ""),
+            "sessions": int(row.get("sessions", 0)),
+            "users": int(row.get("totalUsers", 0)),
+            "active_users": int(row.get("activeUsers", 0)),
+            "new_users": int(row.get("newUsers", 0)),
+            "engaged_sessions": int(row.get("engagedSessions", 0)),
+            "engagement_rate": row.get("engagementRate", 0),
+            "bounce_rate": row.get("bounceRate", 0),
+            "avg_session_duration": row.get("averageSessionDuration", 0),
+            "pageviews": int(row.get("screenPageViews", 0)),
+            "events": int(row.get("eventCount", 0)),
+            "conversions": int(row.get("keyEvents", 0)),
+            "revenue": row.get("totalRevenue", 0),
+        }
+        for row in datasets.get("countries", [])
+    ]
+
+    payload = _build_ga4_payload(
+        property_id,
+        start_date,
+        end_date,
+        summary_metrics,
+        channels,
+        pages,
+        devices,
+    )
+    payload["summary_metrics"]["total_revenue"] = round(
+        summary_metrics.get("totalRevenue", 0), 2
+    )
+    payload["country_performance"] = sorted(
+        countries, key=lambda row: row["sessions"], reverse=True
+    )
+    payload["datasets"] = datasets
+    payload["extraction_metadata"] = {
+        "page_size": _PAGE_SIZE,
+        "summary_api_row_count": summary_count,
+        "dataset_row_counts": row_counts,
+        "errors": extraction_errors,
+        "metric_errors": {
+            **({"summary": summary_metric_errors}
+               if summary_metric_errors else {}),
+            **metric_errors,
+        },
+        "all_datasets_complete": (
+            not extraction_errors
+            and not summary_metric_errors
+            and not metric_errors
+            and all(item["complete"] for item in row_counts.values())
+        ),
+        "api_note": (
+            "GA4 Data API returns aggregated report rows. Event-level raw data "
+            "requires a linked GA4 BigQuery export."
+        ),
+    }
+    return payload
+
+
 # ---------------------------------------------------------------------------
 # Shared payload builder
 # ---------------------------------------------------------------------------
@@ -414,7 +791,9 @@ def _build_ga4_payload(
                 summary_metrics.get("screenPageViews", 0)
             ),
             "total_conversions": int(
-                summary_metrics.get("conversions", 0)
+                summary_metrics.get(
+                    "keyEvents", summary_metrics.get("conversions", 0)
+                )
             ),
             "total_events": int(summary_metrics.get("eventCount", 0)),
         },
@@ -440,8 +819,8 @@ def extract_ga4_payload(
 ) -> dict:
     """Extract and format GA4 data into a structured payload.
 
-    Tries the native ``google-analytics-data`` package first and falls
-    back to the REST API when the package is not installed.
+    Uses paginated GA4 Data API reports so every available aggregate row is
+    returned for each supported reporting surface.
 
     Args:
         creds: Google ``Credentials`` object.
@@ -450,18 +829,13 @@ def extract_ga4_payload(
         end_date: End date.
 
     Returns:
-        Structured dictionary with summary metrics, channels, pages, and
-        device breakdown.  Contains an ``"error"`` key on failure.
+        Structured dictionary with summary metrics, compatibility views,
+        complete datasets, and extraction metadata. Contains an ``"error"``
+        key on failure.
     """
     try:
-        return _extract_ga4_native(creds, property_id, start_date, end_date)
-    except ImportError:
-        pass
-    except Exception as exc:
-        # If native package is installed but request fails, return error
-        return {"error": str(exc), "note": "Failed to fetch GA4 data."}
-
-    try:
-        return _extract_ga4_rest(creds, property_id, start_date, end_date)
+        return _extract_ga4_comprehensive(
+            creds, property_id, start_date, end_date
+        )
     except Exception as exc:
         return {"error": str(exc), "note": "Failed to fetch GA4 data."}
