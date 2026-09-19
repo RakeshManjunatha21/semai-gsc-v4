@@ -204,7 +204,11 @@ def handle_callback():
         st.session_state.oauth_flow = None
 
 
-def render_report_clean(report: str, container_key: str | None = None):
+def render_report_clean(
+    report: str,
+    container_key: str | None = None,
+    skip_first_h1: bool = False,
+):
     """Render a markdown report with custom table handling."""
     report_container = st.container(key=container_key) if container_key else st
 
@@ -213,9 +217,19 @@ def render_report_clean(report: str, container_key: str | None = None):
 
         lines = report.split("\n")
         i = 0
+        first_h1_skipped = False
 
         while i < len(lines):
             line = lines[i]
+
+            if (
+                skip_first_h1
+                and not first_h1_skipped
+                and line.lstrip().startswith("# ")
+            ):
+                first_h1_skipped = True
+                i += 1
+                continue
 
             # Detect markdown tables
             if "|" in line and i + 1 < len(lines) and "|" in lines[i + 1]:
@@ -2192,6 +2206,45 @@ if st.session_state.data_source == "GA":
     )
     ga_property_id = property_map.get(selected_ga_property)
 
+    try:
+        ga_gsc_properties = list_properties(creds)
+    except Exception:
+        ga_gsc_properties = []
+
+    evidence_col1, evidence_col2 = st.columns(2)
+    with evidence_col1:
+        gsc_evidence_options = ["Do not include"] + ga_gsc_properties
+        default_gsc_index = next(
+            (
+                index
+                for index, site_url in enumerate(
+                    gsc_evidence_options
+                )
+                if site_url.startswith("sc-domain:")
+            ),
+            1 if ga_gsc_properties else 0,
+        )
+        selected_ga_gsc_property = st.selectbox(
+            "Search Console evidence",
+            gsc_evidence_options,
+            index=default_gsc_index,
+            help=(
+                "Adds organic queries and landing-page evidence to the GA4 "
+                "audit. Choose the property that belongs to this GA4 site."
+            ),
+            key="ga_gsc_property_selector",
+        )
+    with evidence_col2:
+        include_ga_prior_period = st.toggle(
+            "Include previous-period benchmark",
+            value=True,
+            help=(
+                "Fetches the immediately preceding date range of equal "
+                "length for defensible trend comparisons."
+            ),
+            key="ga_include_prior_period",
+        )
+
     st.markdown("### Select Date Range")
     col_date1, col_date2 = st.columns(2)
 
@@ -2244,6 +2297,99 @@ if st.session_state.data_source == "GA":
         if "error" in ga_payload:
             st.error(f"Error fetching GA4 data: {ga_payload.get('error')}")
             st.stop()
+
+        if selected_ga_gsc_property != "Do not include":
+            try:
+                gsc_context = extract_payload(
+                    creds,
+                    selected_ga_gsc_property,
+                    ga_start_date,
+                    ga_end_date,
+                )
+                if gsc_context.get("summary_metrics"):
+                    ga_payload["gsc_context"] = gsc_context
+                    ga_payload["gsc_extraction"] = {
+                        "status": "available",
+                        "property": selected_ga_gsc_property,
+                    }
+                else:
+                    ga_payload["gsc_extraction"] = {
+                        "status": "unavailable",
+                        "property": selected_ga_gsc_property,
+                        "message": gsc_context.get(
+                            "note", "No Search Console rows were returned."
+                        ),
+                    }
+            except Exception as exc:
+                ga_payload["gsc_extraction"] = {
+                    "status": "error",
+                    "property": selected_ga_gsc_property,
+                    "message": str(exc),
+                }
+        else:
+            ga_payload["gsc_extraction"] = {
+                "status": "not_selected",
+                "message": "No Search Console property was selected.",
+            }
+
+        if include_ga_prior_period:
+            prior_end_date = ga_start_date - timedelta(days=1)
+            prior_start_date = prior_end_date - timedelta(
+                days=ga_days_diff - 1
+            )
+            prior_payload = extract_ga4_payload(
+                creds,
+                ga_property_id,
+                prior_start_date,
+                prior_end_date,
+            )
+            prior_summary = prior_payload.get("summary_metrics", {})
+            prior_has_data = any(
+                float(value or 0) != 0
+                for value in prior_summary.values()
+            )
+            if "error" not in prior_payload and prior_has_data:
+                prior_datasets = prior_payload.get("datasets", {})
+                ga_payload["prior_period"] = {
+                    "date_range": prior_payload.get("date_range", {}),
+                    "summary_metrics": prior_summary,
+                    "datasets": {
+                        name: prior_datasets.get(name, [])
+                        for name in [
+                            "traffic_acquisition",
+                            "user_acquisition",
+                            "devices",
+                            "countries",
+                            "events",
+                        ]
+                    },
+                    "scope": (
+                        "Equal-length benchmark covering summary, acquisition, "
+                        "device, country, and event metrics."
+                    ),
+                }
+                ga_payload["prior_period_extraction"] = {
+                    "status": "available",
+                    "start": str(prior_start_date),
+                    "end": str(prior_end_date),
+                }
+            else:
+                ga_payload["prior_period_extraction"] = {
+                    "status": (
+                        "error" if "error" in prior_payload
+                        else "unavailable"
+                    ),
+                    "start": str(prior_start_date),
+                    "end": str(prior_end_date),
+                    "message": prior_payload.get("error") or (
+                        "No GA4 rows were returned for the previous period."
+                    ),
+                }
+        else:
+            ga_payload["prior_period_extraction"] = {
+                "status": "not_selected",
+                "message": "Previous-period benchmarking was disabled.",
+            }
 
         try:
             from services.ga4_bigquery import (
@@ -2357,6 +2503,11 @@ if st.session_state.data_source == "GA":
         st.caption(
             f"Data source: {ga_pay.get('data_source', 'GA4 Data API')}"
         )
+        st.caption(
+            "Report terminology: Blocked means the evidence required for a "
+            "calculation was unavailable in this run. It is not an API denial "
+            "unless the stated reason is an API or permission error."
+        )
         if ga_metrics:
             st.markdown("### Metrics Overview")
             metric_cols = st.columns(4)
@@ -2381,7 +2532,11 @@ if st.session_state.data_source == "GA":
                 st.metric("Total Pageviews", f"{ga_metrics.get('total_pageviews', 0):,}")
 
         st.markdown("")
-        render_report_clean(ga_rpt, container_key="ga4-report")
+        render_report_clean(
+            ga_rpt,
+            container_key="ga4-report",
+            skip_first_h1=True,
+        )
 
         st.markdown("")
 

@@ -218,7 +218,68 @@ BEGIN COMPARISON REPORT:
             "countries": "datasets.countries",
         }
         datasets = model_payload.get("datasets", {})
+        gsc_context = model_payload.get("gsc_context", {})
+        gsc_extraction = model_payload.get("gsc_extraction", {})
+        prior_period = model_payload.get("prior_period", {})
+        prior_summary = prior_period.get("summary_metrics", {})
+        prior_period_present = bool(prior_summary) and any(
+            float(value or 0) != 0 for value in prior_summary.values()
+        )
+        prior_extraction = model_payload.get(
+            "prior_period_extraction", {}
+        )
+        bigquery_extraction = model_payload.get(
+            "bigquery_extraction", {}
+        )
+        bigquery_datasets = {
+            name: rows
+            for name, rows in datasets.items()
+            if name.startswith("bq_")
+        }
+        bigquery_rows_present = any(bigquery_datasets.values())
+        key_event_configuration = model_payload.get(
+            "key_event_configuration", {}
+        )
+        configured_key_events = key_event_configuration.get(
+            "configured_names", []
+        )
         model_payload["analysis_input_manifest"] = {
+            "ga4_key_event_configuration": {
+                "status": (
+                    "api_error"
+                    if key_event_configuration.get("error")
+                    else "available"
+                    if configured_key_events
+                    else "configuration_required"
+                ),
+                "configured_names": configured_key_events,
+                "core_funnel_activity": key_event_configuration.get(
+                    "core_funnel_activity", {}
+                ),
+                "error": key_event_configuration.get("error"),
+            },
+            "input_1_gsc_queries": {
+                "dataset": "gsc_context.top_queries_by_impressions",
+                "present": bool(
+                    gsc_context.get("top_queries_by_impressions")
+                ),
+                "row_count": len(
+                    gsc_context.get("top_queries_by_impressions", [])
+                ),
+                "extraction_status": gsc_extraction.get(
+                    "status", "not_selected"
+                ),
+                "unavailable_reason": gsc_extraction.get("message"),
+            },
+            "input_2_gsc_landing_pages": {
+                "dataset": "gsc_context.top_pages",
+                "present": bool(gsc_context.get("top_pages")),
+                "row_count": len(gsc_context.get("top_pages", [])),
+                "extraction_status": gsc_extraction.get(
+                    "status", "not_selected"
+                ),
+                "unavailable_reason": gsc_extraction.get("message"),
+            },
             "input_7_events_report": {
                 "dataset": "datasets.events",
                 "present": bool(datasets.get("events")),
@@ -229,6 +290,15 @@ BEGIN COMPARISON REPORT:
                 "present": bool(datasets.get("bq_form_start_paths")),
                 "scope": "same-session BigQuery path context",
                 "authoritative_for_funnel_rates": False,
+                "extraction_status": (
+                    "available" if datasets.get("bq_form_start_paths")
+                    else bigquery_extraction.get("status", "unavailable")
+                ),
+                "unavailable_reason": (
+                    bigquery_extraction.get("message")
+                    if not datasets.get("bq_form_start_paths")
+                    else None
+                ),
             },
             "input_13_funnel_exploration_equivalent": {
                 "dataset": "datasets.bq_ordered_funnel",
@@ -236,6 +306,15 @@ BEGIN COMPARISON REPORT:
                 "scope": "same-session timestamp-ordered BigQuery funnel",
                 "page_level_segmentation": bool(
                     datasets.get("bq_ordered_funnel")
+                ),
+                "extraction_status": (
+                    "available" if datasets.get("bq_ordered_funnel")
+                    else bigquery_extraction.get("status", "unavailable")
+                ),
+                "unavailable_reason": (
+                    bigquery_extraction.get("message")
+                    if not datasets.get("bq_ordered_funnel")
+                    else None
                 ),
             },
             "input_14_page_event_free_form_equivalent": {
@@ -250,11 +329,30 @@ BEGIN COMPARISON REPORT:
                 "sequential": False,
                 "diagnostic_only": True,
             },
+            "input_15_prior_period": {
+                "dataset": "prior_period",
+                "present": prior_period_present,
+                "date_range": prior_period.get("date_range"),
+                "scope": prior_period.get("scope"),
+                "extraction_status": prior_extraction.get(
+                    "status", "not_selected"
+                ),
+                "unavailable_reason": prior_extraction.get("message"),
+            },
             "input_16_bigquery_event_export": {
-                "datasets": [
-                    name for name in datasets if name.startswith("bq_")
-                ],
-                "present": any(name.startswith("bq_") for name in datasets),
+                "datasets": {
+                    name: len(rows)
+                    for name, rows in bigquery_datasets.items()
+                },
+                "present": bigquery_rows_present,
+                "extraction_status": (
+                    "available" if bigquery_rows_present
+                    else bigquery_extraction.get("status", "unavailable")
+                ),
+                "unavailable_reason": (
+                    bigquery_extraction.get("message")
+                    if not bigquery_rows_present else None
+                ),
             },
         }
         return model_payload
@@ -297,6 +395,22 @@ If the data shows an error or has minimal metrics, provide the empty data guidan
 Otherwise, generate all sections of the GA4 Deep Audit Report following the template structure.
 Include a country-wise performance analysis using datasets.countries, covering
 traffic, engagement, key events, and revenue without inventing unavailable values.
+
+STATUS TERMINOLOGY:
+"Blocked" means a requested conclusion cannot be computed from the evidence
+supplied in this run. It does not mean Google blocked the API request unless
+analysis_input_manifest explicitly reports an API or permission error. Every
+Blocked label must include one of these causes and the concrete reason:
+- Missing selection/data: an optional property or dataset was not supplied.
+- No exported rows: the integration exists but returned no usable rows for the
+    selected dates.
+- Configuration required: tracking or a GA4 setting is not configured.
+- External evidence required: the conclusion needs CRM, revenue, target, or
+    manually exported attribution evidence outside the available APIs.
+- API/permission error: only when the extraction status explicitly says error.
+Use an available BigQuery ordered funnel as the input 13 equivalent and an
+available BigQuery event export as input 16. Do not call either absent when its
+manifest entry says present.
 
 START YOUR RESPONSE NOW:
 """
