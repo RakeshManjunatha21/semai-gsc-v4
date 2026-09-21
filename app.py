@@ -2104,13 +2104,8 @@ with st.sidebar:
         key="llm_provider",
     )
     if selected_provider == "OpenRouter":
-        openrouter_api_key = OPENROUTER_API_KEY or st.text_input(
-            "OpenRouter API key",
-            type="password",
-            key="openrouter_api_key_input",
-        )
-        if not openrouter_api_key:
-            st.info("Enter an OpenRouter API key to use this provider.")
+        if not OPENROUTER_API_KEY:
+            st.info("OpenRouter is not configured on the server.")
             st.stop()
         openrouter_models = get_openrouter_free_model_options()
         model_ids = [model["id"] for model in openrouter_models]
@@ -2126,7 +2121,7 @@ with st.sidebar:
             key="openrouter_model",
         )
         selected_llm = OpenRouterModel(
-            openrouter_api_key,
+            OPENROUTER_API_KEY,
             selected_model_id,
         )
         st.caption(f"Using `{selected_model_id}`")
