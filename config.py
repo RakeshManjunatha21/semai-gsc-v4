@@ -122,6 +122,7 @@ def load_gemini_api_key() -> str | None:
 
 
 GEMINI_API_KEY = load_gemini_api_key()
+OPENROUTER_API_KEY = get_setting("OPENROUTER_API_KEY")
 
 
 def configure_model() -> genai.GenerativeModel | None:

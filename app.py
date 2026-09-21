@@ -20,6 +20,7 @@ import streamlit as st
 from config import (
     ADMIN_PASSWORD,
     GEMINI_API_KEY,
+    OPENROUTER_API_KEY,
     configure_model,
     ENABLE_TOKEN_PERSISTENCE,
 )
@@ -38,6 +39,11 @@ from services.gsc import (
     list_properties,
 )
 from services.report_generator import ReportGenerator
+from services.llm import (
+    OPENROUTER_FREE_ROUTER,
+    OpenRouterModel,
+    list_openrouter_free_models,
+)
 from services.export import (
     create_ga4_excel_export,
     create_word_document,
@@ -50,15 +56,12 @@ from services.export import (
 # Gemini model & report generator
 # ---------------------------------------------------------------------------
 MODEL = configure_model()
-if not GEMINI_API_KEY:
+if not GEMINI_API_KEY and not OPENROUTER_API_KEY:
     st.error(
-        "Gemini API key not found. "
-        "Set GOOGLE_GEMINI_KEY or GEMINI_API_KEY via environment variables "
-        "or Streamlit Secrets."
+        "No LLM API key was found. Set GOOGLE_GEMINI_KEY, GEMINI_API_KEY, "
+        "or OPENROUTER_API_KEY via environment variables or Streamlit Secrets."
     )
     st.stop()
-
-report_gen = ReportGenerator(model=MODEL)
 
 # ═══════════════════════════════════════════════════════════════════════════════
 #  SESSION STATE INITIALISATION
@@ -120,6 +123,23 @@ def get_ga4_service_functions():
         return extract_ga4_payload, list_ga4_properties
     except Exception as exc:
         raise RuntimeError(f"Unable to load GA4 service module: {exc}") from exc
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def get_openrouter_free_model_options() -> list[dict[str, str]]:
+    """Return free OpenRouter models with a resilient router fallback."""
+    try:
+        models = list_openrouter_free_models()
+    except Exception:
+        models = []
+    router = {
+        "id": OPENROUTER_FREE_ROUTER,
+        "name": "Free Models Router (automatic)",
+    }
+    return [router, *(
+        model for model in models
+        if model["id"] != OPENROUTER_FREE_ROUTER
+    )]
 
 
 def login_button():
@@ -2083,6 +2103,42 @@ with st.sidebar:
         st.rerun()
 
     st.divider()
+    st.markdown("### AI Model")
+    provider_options = []
+    if GEMINI_API_KEY:
+        provider_options.append("Gemini")
+    if OPENROUTER_API_KEY:
+        provider_options.append("OpenRouter")
+
+    selected_provider = st.selectbox(
+        "Provider",
+        provider_options,
+        key="llm_provider",
+    )
+    if selected_provider == "OpenRouter":
+        openrouter_models = get_openrouter_free_model_options()
+        model_ids = [model["id"] for model in openrouter_models]
+        model_names = {
+            model["id"]: model["name"] for model in openrouter_models
+        }
+        selected_model_id = st.selectbox(
+            "Free model",
+            model_ids,
+            format_func=lambda model_id: (
+                f"{model_names[model_id]} - {model_id}"
+            ),
+            key="openrouter_model",
+        )
+        selected_llm = OpenRouterModel(
+            OPENROUTER_API_KEY,
+            selected_model_id,
+        )
+        st.caption(f"Using `{selected_model_id}`")
+    else:
+        selected_llm = MODEL
+        st.caption("Using `gemini-3-flash-preview`")
+
+    st.divider()
     st.markdown("### About")
     st.markdown("""
     <div style='color: rgba(255,255,255,0.9); font-size: 0.85rem; line-height: 1.6;'>
@@ -2091,6 +2147,8 @@ with st.sidebar:
     """, unsafe_allow_html=True)
     st.markdown("")
     st.markdown("")
+
+report_gen = ReportGenerator(model=selected_llm)
 
 # ═══════════════════════════════════════════════════════════════════════════════
 #  DATA SOURCE SELECTION
@@ -2363,7 +2421,7 @@ if st.session_state.data_source == "GA":
                 if exc.__class__.__name__ != "ResourceExhausted":
                     raise
                 st.error(
-                    "Gemini's per-minute input quota is temporarily exhausted. "
+                    "The selected model's input quota is temporarily exhausted. "
                     "Please wait about a minute, then generate the report again."
                 )
                 st.stop()
