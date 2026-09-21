@@ -2104,9 +2104,6 @@ with st.sidebar:
         key="llm_provider",
     )
     if selected_provider == "OpenRouter":
-        if not OPENROUTER_API_KEY:
-            st.info("OpenRouter is not configured on the server.")
-            st.stop()
         openrouter_models = get_openrouter_free_model_options()
         model_ids = [model["id"] for model in openrouter_models]
         model_names = {
@@ -2121,10 +2118,12 @@ with st.sidebar:
             key="openrouter_model",
         )
         selected_llm = OpenRouterModel(
-            OPENROUTER_API_KEY,
+            OPENROUTER_API_KEY or "",
             selected_model_id,
         )
         st.caption(f"Using `{selected_model_id}`")
+        if not OPENROUTER_API_KEY:
+            st.warning("OpenRouter is not configured on the server.")
     else:
         if not GEMINI_API_KEY:
             st.info("Configure a Gemini API key or choose OpenRouter.")
