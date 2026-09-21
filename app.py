@@ -56,12 +56,6 @@ from services.export import (
 # Gemini model & report generator
 # ---------------------------------------------------------------------------
 MODEL = configure_model()
-if not GEMINI_API_KEY and not OPENROUTER_API_KEY:
-    st.error(
-        "No LLM API key was found. Set GOOGLE_GEMINI_KEY, GEMINI_API_KEY, "
-        "or OPENROUTER_API_KEY via environment variables or Streamlit Secrets."
-    )
-    st.stop()
 
 # ═══════════════════════════════════════════════════════════════════════════════
 #  SESSION STATE INITIALISATION
@@ -2104,18 +2098,20 @@ with st.sidebar:
 
     st.divider()
     st.markdown("### AI Model")
-    provider_options = []
-    if GEMINI_API_KEY:
-        provider_options.append("Gemini")
-    if OPENROUTER_API_KEY:
-        provider_options.append("OpenRouter")
-
     selected_provider = st.selectbox(
         "Provider",
-        provider_options,
+        ["Gemini", "OpenRouter"],
         key="llm_provider",
     )
     if selected_provider == "OpenRouter":
+        openrouter_api_key = OPENROUTER_API_KEY or st.text_input(
+            "OpenRouter API key",
+            type="password",
+            key="openrouter_api_key_input",
+        )
+        if not openrouter_api_key:
+            st.info("Enter an OpenRouter API key to use this provider.")
+            st.stop()
         openrouter_models = get_openrouter_free_model_options()
         model_ids = [model["id"] for model in openrouter_models]
         model_names = {
@@ -2130,11 +2126,14 @@ with st.sidebar:
             key="openrouter_model",
         )
         selected_llm = OpenRouterModel(
-            OPENROUTER_API_KEY,
+            openrouter_api_key,
             selected_model_id,
         )
         st.caption(f"Using `{selected_model_id}`")
     else:
+        if not GEMINI_API_KEY:
+            st.info("Configure a Gemini API key or choose OpenRouter.")
+            st.stop()
         selected_llm = MODEL
         st.caption("Using `gemini-3-flash-preview`")
 
