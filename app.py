@@ -41,6 +41,7 @@ from services.gsc import (
 from services.report_generator import ReportGenerator
 from services.llm import (
     OPENROUTER_FREE_ROUTER,
+    OpenRouterError,
     OpenRouterModel,
     list_openrouter_free_models,
 )
@@ -134,6 +135,23 @@ def get_openrouter_free_model_options() -> list[dict[str, str]]:
         model for model in models
         if model["id"] != OPENROUTER_FREE_ROUTER
     )]
+
+
+def generate_report(operation, *args):
+    """Run a report model call and show safe provider errors in the UI."""
+    try:
+        return operation(*args)
+    except OpenRouterError as exc:
+        st.error(str(exc))
+        st.stop()
+    except Exception as exc:
+        if exc.__class__.__name__ != "ResourceExhausted":
+            raise
+        st.error(
+            "The selected model's input quota is temporarily exhausted. "
+            "Please wait about a minute, then generate the report again."
+        )
+        st.stop()
 
 
 def login_button():
@@ -2122,14 +2140,15 @@ with st.sidebar:
             selected_model_id,
         )
         st.caption(f"Using `{selected_model_id}`")
+        llm_ready = bool(OPENROUTER_API_KEY)
         if not OPENROUTER_API_KEY:
             st.warning("OpenRouter is not configured on the server.")
     else:
-        if not GEMINI_API_KEY:
-            st.info("Configure a Gemini API key or choose OpenRouter.")
-            st.stop()
         selected_llm = MODEL
         st.caption("Using `gemini-3-flash-preview`")
+        llm_ready = bool(GEMINI_API_KEY)
+        if not GEMINI_API_KEY:
+            st.warning("Gemini is not configured on the server.")
 
     st.divider()
     st.markdown("### About")
@@ -2286,6 +2305,7 @@ if st.session_state.data_source == "GA":
         use_container_width=True,
         type="primary",
         help="Generate a comprehensive GA4 analysis report",
+        disabled=not llm_ready,
     )
 
     if ga_report_btn:
@@ -2408,16 +2428,10 @@ if st.session_state.data_source == "GA":
             st.stop()
 
         with st.spinner("Generating GA4 Deep Audit Report..."):
-            try:
-                ga_report = report_gen.generate_ga4_deep_audit(ga_payload)
-            except Exception as exc:
-                if exc.__class__.__name__ != "ResourceExhausted":
-                    raise
-                st.error(
-                    "The selected model's input quota is temporarily exhausted. "
-                    "Please wait about a minute, then generate the report again."
-                )
-                st.stop()
+            ga_report = generate_report(
+                report_gen.generate_ga4_deep_audit,
+                ga_payload,
+            )
 
         st.session_state.ga4_report = ga_report
         st.session_state.ga4_property_name = selected_ga_property
@@ -2792,6 +2806,7 @@ if analysis_type == "File Upload Analytics" and not comparison_mode:
                 use_container_width=True,
                 type="primary",
                 help="Generate Deep Audit and Cluster Audit reports using uploaded file data",
+                disabled=not llm_ready,
             )
         else:
             file_analytics_btn = False
@@ -2824,6 +2839,7 @@ if analysis_type == "File Upload Analytics" and not comparison_mode:
                 use_container_width=True,
                 type="primary",
                 help="Generate Deep Audit and Cluster Audit reports using uploaded file data",
+                disabled=not llm_ready,
             )
         else:
             file_analytics_btn = False
@@ -2839,6 +2855,7 @@ elif comparison_mode:
         use_container_width=True,
         type="primary",
         help="Compare performance between two time periods with detailed insights",
+        disabled=not llm_ready,
     )
     deep_audit_btn = False
     cluster_audit_btn = False
@@ -2853,6 +2870,7 @@ else:
             use_container_width=True,
             type="primary",
             help="Comprehensive SEO/GEO/AEO analysis with detailed insights",
+            disabled=not llm_ready,
         )
 
     with col2:
@@ -2861,6 +2879,7 @@ else:
             use_container_width=True,
             type="secondary",
             help="Cluster-based analysis with actionable recommendations",
+            disabled=not llm_ready,
         )
     comparison_btn = False
     file_analytics_btn = False
@@ -2882,10 +2901,14 @@ if deep_audit_btn:
         st.stop()
 
     with st.spinner("Generating Deep Audit Report..."):
-        report = report_gen.generate_deep_audit(payload)
+        report = generate_report(report_gen.generate_deep_audit, payload)
 
     with st.spinner("Generating GSC Action Report..."):
-        action_rpt = report_gen.generate_action_report(report, payload)
+        action_rpt = generate_report(
+            report_gen.generate_action_report,
+            report,
+            payload,
+        )
 
     st.session_state.deep_audit_report = report
     st.session_state.action_report = action_rpt
@@ -3069,7 +3092,7 @@ if cluster_audit_btn:
         st.stop()
 
     with st.spinner("Generating Cluster Audit Report..."):
-        report = report_gen.generate_cluster_audit(payload)
+        report = generate_report(report_gen.generate_cluster_audit, payload)
 
     st.session_state.cluster_audit_report = report
     st.session_state.cluster_audit_payload = payload
@@ -3177,13 +3200,17 @@ if file_analytics_btn:
         st.success(f"Processed {len(uploaded_files)} file(s) with {len(combined_df):,} total rows.")
 
         with st.spinner("Generating Deep Audit Report from uploaded data..."):
-            st.session_state.file_deep_report = report_gen.generate_file_deep_audit(
-                combined_df, uploaded_files
+            st.session_state.file_deep_report = generate_report(
+                report_gen.generate_file_deep_audit,
+                combined_df,
+                uploaded_files,
             )
 
         with st.spinner("Generating Cluster Audit Report from uploaded data..."):
-            st.session_state.file_cluster_report = report_gen.generate_file_cluster_audit(
-                combined_df, uploaded_files
+            st.session_state.file_cluster_report = generate_report(
+                report_gen.generate_file_cluster_audit,
+                combined_df,
+                uploaded_files,
             )
 
         st.session_state.file_report_metadata = {
@@ -3360,7 +3387,12 @@ if comparison_btn:
         comp_metrics = calculate_comparison_metrics(payload1, payload2)
 
     with st.spinner("Generating Period Comparison Report..."):
-        report = report_gen.generate_comparison_report(payload1, payload2, comp_metrics)
+        report = generate_report(
+            report_gen.generate_comparison_report,
+            payload1,
+            payload2,
+            comp_metrics,
+        )
 
     st.divider()
     st.markdown(
