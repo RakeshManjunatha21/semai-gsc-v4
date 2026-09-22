@@ -23,11 +23,46 @@ class OpenRouterError(RuntimeError):
 class OpenRouterModel:
     """Expose OpenRouter through the Gemini-style interface used by reports."""
 
+    MAX_CONTINUATIONS = 2
+
     def __init__(self, api_key: str, model_name: str):
         self.api_key = api_key
         self.model_name = model_name
 
     def generate_content(self, prompt: str) -> _GeneratedContent:
+        messages = [{"role": "user", "content": prompt}]
+        text_parts = []
+        for continuation in range(self.MAX_CONTINUATIONS + 1):
+            text, finish_reason = self._generate_part(messages)
+            if text:
+                text_parts.append(text.rstrip())
+            if finish_reason != "length":
+                return _GeneratedContent(text="\n\n".join(text_parts).strip())
+            if not text:
+                raise OpenRouterError(
+                    "The selected model used its output budget before producing "
+                    "report text. Choose another free model."
+                )
+            if continuation == self.MAX_CONTINUATIONS:
+                raise OpenRouterError(
+                    "The selected model could not complete this report within "
+                    "three responses. Choose a model with a larger output limit."
+                )
+            messages.extend([
+                {"role": "assistant", "content": text},
+                {
+                    "role": "user",
+                    "content": (
+                        "Continue from the exact point where the report stopped. "
+                        "Do not repeat prior content, restart the report, or add "
+                        "commentary. Complete every remaining required section."
+                    ),
+                },
+            ])
+
+        raise OpenRouterError("OpenRouter could not complete the report.")
+
+    def _generate_part(self, messages: list[dict[str, str]]) -> tuple[str, str | None]:
         try:
             response = requests.post(
                 f"{OPENROUTER_API_URL}/chat/completions",
@@ -39,7 +74,7 @@ class OpenRouterModel:
                 },
                 json={
                     "model": self.model_name,
-                    "messages": [{"role": "user", "content": prompt}],
+                    "messages": messages,
                     "temperature": 0.2,
                     "max_tokens": 16384,
                     "reasoning": {
@@ -93,7 +128,7 @@ class OpenRouterModel:
                 "The selected OpenRouter model returned no report text. "
                 "Choose another free model."
             )
-        return _GeneratedContent(text=text)
+        return text, choice.get("finish_reason")
 
     def test_connection(self) -> str:
         """Run a minimal completion through the selected backend model."""
