@@ -2143,6 +2143,18 @@ with st.sidebar:
         llm_ready = bool(OPENROUTER_API_KEY)
         if not OPENROUTER_API_KEY:
             st.warning("OpenRouter is not configured on the server.")
+        elif st.button(
+            "Test selected model",
+            use_container_width=True,
+            key="test_openrouter_model",
+        ):
+            with st.spinner("Testing OpenRouter..."):
+                try:
+                    selected_llm.test_connection()
+                except OpenRouterError as exc:
+                    st.error(str(exc))
+                else:
+                    st.success("OpenRouter and the selected model are working.")
     else:
         selected_llm = MODEL
         st.caption("Using `gemini-3-flash-preview`")

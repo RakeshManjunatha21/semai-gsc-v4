@@ -41,7 +41,11 @@ class OpenRouterModel:
                     "model": self.model_name,
                     "messages": [{"role": "user", "content": prompt}],
                     "temperature": 0.2,
-                    "max_tokens": 8192,
+                    "max_tokens": 16384,
+                    "reasoning": {
+                        "effort": "low",
+                        "exclude": True,
+                    },
                 },
                 timeout=180,
             )
@@ -65,12 +69,36 @@ class OpenRouterModel:
             raise OpenRouterError(message) from exc
         try:
             payload = response.json()
-            text = payload["choices"][0]["message"]["content"]
+            choice = payload["choices"][0]
+            message = choice["message"]
+            text = message.get("content")
         except (KeyError, IndexError, TypeError, ValueError) as exc:
             raise OpenRouterError("OpenRouter returned an invalid response.") from exc
         if not text:
-            raise OpenRouterError("OpenRouter returned an empty response.")
+            if choice.get("error"):
+                raise OpenRouterError(
+                    "The selected OpenRouter model failed. Choose another free model."
+                )
+            finish_reason = choice.get("finish_reason")
+            if finish_reason == "length":
+                raise OpenRouterError(
+                    "The selected model used its output budget before producing "
+                    "report text. Choose another free model."
+                )
+            if finish_reason == "content_filter":
+                raise OpenRouterError(
+                    "The selected model filtered the response. Choose another free model."
+                )
+            raise OpenRouterError(
+                "The selected OpenRouter model returned no report text. "
+                "Choose another free model."
+            )
         return _GeneratedContent(text=text)
+
+    def test_connection(self) -> str:
+        """Run a minimal completion through the selected backend model."""
+        result = self.generate_content("Reply with exactly: OK")
+        return result.text
 
 
 def list_openrouter_free_models() -> list[dict[str, str]]:
