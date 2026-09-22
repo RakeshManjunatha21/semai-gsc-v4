@@ -244,18 +244,21 @@ def render_report_clean(
     skip_first_h1: bool = False,
 ):
     """Render a complete Markdown report in one stable document block."""
-    report_container = st.container(key=container_key) if container_key else st
+    lines = report.splitlines()
+    if skip_first_h1:
+        first_h1_index = next((
+            index for index, line in enumerate(lines)
+            if line.lstrip().startswith("# ")
+        ), None)
+        if first_h1_index is not None:
+            del lines[first_h1_index]
 
-    with report_container:
-        lines = report.splitlines()
-        if skip_first_h1:
-            first_h1_index = next((
-                index for index, line in enumerate(lines)
-                if line.lstrip().startswith("# ")
-            ), None)
-            if first_h1_index is not None:
-                del lines[first_h1_index]
-        st.markdown("\n".join(lines))
+    markdown = "\n".join(lines)
+    if container_key:
+        with st.container(key=container_key):
+            st.markdown(markdown)
+    else:
+        st.markdown(markdown)
 
 
 def render_gsc_source_data(payload: dict, key_prefix: str):
