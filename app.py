@@ -121,7 +121,7 @@ def get_ga4_service_functions():
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
-def get_openrouter_free_model_options() -> list[dict[str, str]]:
+def get_openrouter_free_model_options() -> list[dict[str, object]]:
     """Return free OpenRouter models with a resilient router fallback."""
     try:
         models = list_openrouter_free_models()
@@ -130,6 +130,8 @@ def get_openrouter_free_model_options() -> list[dict[str, str]]:
     router = {
         "id": OPENROUTER_FREE_ROUTER,
         "name": "Free Models Router (automatic)",
+        "context_length": 200_000,
+        "max_completion_tokens": None,
     }
     return [router, *(
         model for model in models
@@ -1328,6 +1330,56 @@ st.markdown("""
         border-color: #64748B !important;
     }
 
+    [data-testid="stSidebar"] [data-testid="stWidgetLabel"] p {
+        color: #FFFFFF !important;
+        font-weight: 600;
+    }
+
+    .st-key-ai-model-panel {
+        margin: 0.25rem 0 0.75rem;
+        padding: 1rem;
+        background: #202B40;
+        border: 1px solid #344158;
+        border-radius: 8px;
+    }
+
+    .st-key-ai-model-panel .stSelectbox {
+        margin: 0 0 0.8rem;
+    }
+
+    .st-key-ai-model-panel .stSelectbox:last-of-type {
+        margin-bottom: 0.35rem;
+    }
+
+    .ai-model-meta {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.5rem;
+        margin: 0.25rem 0 0.75rem;
+    }
+
+    .ai-model-stat {
+        padding: 0.65rem;
+        background: #172033;
+        border: 1px solid #344158;
+        border-radius: 6px;
+    }
+
+    .ai-model-stat span {
+        display: block;
+        color: #AAB6CA;
+        font-size: 0.7rem;
+        line-height: 1.2;
+    }
+
+    .ai-model-stat strong {
+        display: block;
+        margin-top: 0.25rem;
+        color: #FFFFFF;
+        font-size: 0.92rem;
+        line-height: 1.25;
+    }
+
     .stButton > button,
     .stDownloadButton > button,
     .stLinkButton > a {
@@ -2116,51 +2168,90 @@ with st.sidebar:
 
     st.divider()
     st.markdown("### AI Model")
-    selected_provider = st.selectbox(
-        "Provider",
-        ["Gemini", "OpenRouter"],
-        key="llm_provider",
-    )
-    if selected_provider == "OpenRouter":
-        openrouter_models = get_openrouter_free_model_options()
-        model_ids = [model["id"] for model in openrouter_models]
-        model_names = {
-            model["id"]: model["name"] for model in openrouter_models
-        }
-        selected_model_id = st.selectbox(
-            "Free model",
-            model_ids,
-            format_func=lambda model_id: (
-                f"{model_names[model_id]} - {model_id}"
-            ),
-            key="openrouter_model",
+    with st.container(key="ai-model-panel"):
+        selected_provider = st.selectbox(
+            "Provider",
+            ["Gemini", "OpenRouter"],
+            format_func=lambda provider: {
+                "Gemini": "Google Gemini",
+                "OpenRouter": "OpenRouter free models",
+            }[provider],
+            key="llm_provider",
         )
-        selected_llm = OpenRouterModel(
-            OPENROUTER_API_KEY or "",
-            selected_model_id,
-        )
-        st.caption(f"Using `{selected_model_id}`")
-        llm_ready = bool(OPENROUTER_API_KEY)
-        if not OPENROUTER_API_KEY:
-            st.warning("OpenRouter is not configured on the server.")
-        elif st.button(
-            "Test selected model",
-            use_container_width=True,
-            key="test_openrouter_model",
-        ):
-            with st.spinner("Testing OpenRouter..."):
-                try:
-                    selected_llm.test_connection()
-                except OpenRouterError as exc:
-                    st.error(str(exc))
-                else:
-                    st.success("OpenRouter and the selected model are working.")
-    else:
-        selected_llm = MODEL
-        st.caption("Using `gemini-3-flash-preview`")
-        llm_ready = bool(GEMINI_API_KEY)
-        if not GEMINI_API_KEY:
-            st.warning("Gemini is not configured on the server.")
+        if selected_provider == "OpenRouter":
+            openrouter_models = get_openrouter_free_model_options()
+            models_by_id = {
+                str(model["id"]): model for model in openrouter_models
+            }
+            selected_model_id = st.selectbox(
+                "Choose a free model",
+                list(models_by_id),
+                format_func=lambda model_id: str(
+                    models_by_id[model_id]["name"]
+                ),
+                key="openrouter_model",
+            )
+            selected_model = models_by_id[selected_model_id]
+            output_limit = selected_model["max_completion_tokens"]
+            context_length = selected_model["context_length"]
+            output_limit_label = (
+                f"{int(output_limit):,} tokens"
+                if output_limit is not None
+                else "Varies by route"
+            )
+            context_label = (
+                f"{int(context_length):,} tokens"
+                if context_length is not None
+                else "Not published"
+            )
+            st.markdown(
+                f"""
+                <div class="ai-model-meta">
+                    <div class="ai-model-stat">
+                        <span>MAX OUTPUT</span>
+                        <strong>{output_limit_label}</strong>
+                    </div>
+                    <div class="ai-model-stat">
+                        <span>CONTEXT WINDOW</span>
+                        <strong>{context_label}</strong>
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            if selected_model_id == OPENROUTER_FREE_ROUTER:
+                st.caption(
+                    "Output capacity varies with the model chosen for each request."
+                )
+            else:
+                st.caption(
+                    "This app requests up to 16,384 output tokens per response."
+                )
+            selected_llm = OpenRouterModel(
+                OPENROUTER_API_KEY or "",
+                selected_model_id,
+            )
+            llm_ready = bool(OPENROUTER_API_KEY)
+            if not OPENROUTER_API_KEY:
+                st.warning("OpenRouter is not configured on the server.")
+            elif st.button(
+                "Test selected model",
+                use_container_width=True,
+                key="test_openrouter_model",
+            ):
+                with st.spinner("Testing OpenRouter..."):
+                    try:
+                        selected_llm.test_connection()
+                    except OpenRouterError as exc:
+                        st.error(str(exc))
+                    else:
+                        st.success("OpenRouter and the selected model are working.")
+        else:
+            selected_llm = MODEL
+            st.caption("Gemini 3 Flash Preview")
+            llm_ready = bool(GEMINI_API_KEY)
+            if not GEMINI_API_KEY:
+                st.warning("Gemini is not configured on the server.")
 
     st.divider()
     st.markdown("### About")

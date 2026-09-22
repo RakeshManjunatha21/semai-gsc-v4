@@ -136,7 +136,7 @@ class OpenRouterModel:
         return result.text
 
 
-def list_openrouter_free_models() -> list[dict[str, str]]:
+def list_openrouter_free_models() -> list[dict[str, object]]:
     """Return the currently advertised zero-cost text models."""
     response = requests.get(f"{OPENROUTER_API_URL}/models", timeout=20)
     response.raise_for_status()
@@ -148,8 +148,14 @@ def list_openrouter_free_models() -> list[dict[str, str]]:
             and str(pricing.get("completion")) == "0"
             and model.get("id")
         ):
+            top_provider = model.get("top_provider") or {}
             models.append({
                 "id": model["id"],
                 "name": model.get("name") or model["id"],
+                "context_length": top_provider.get("context_length")
+                or model.get("context_length"),
+                "max_completion_tokens": top_provider.get(
+                    "max_completion_tokens"
+                ),
             })
     return sorted(models, key=lambda item: item["name"].lower())
