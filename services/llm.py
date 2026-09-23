@@ -2,13 +2,20 @@
 
 from __future__ import annotations
 
+import random
+import time
 from dataclasses import dataclass
+from email.utils import parsedate_to_datetime
+from datetime import datetime, timezone
 
 import requests
 
 
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1"
 OPENROUTER_FREE_ROUTER = "openrouter/free"
+OPENROUTER_REQUEST_OUTPUT_TOKENS = 16_384
+OPENROUTER_MIN_CONTEXT_TOKENS = 65_536
+_TRANSIENT_STATUS_CODES = {408, 409, 425, 429, 500, 502, 503, 504}
 
 
 @dataclass
@@ -23,11 +30,23 @@ class OpenRouterError(RuntimeError):
 class OpenRouterModel:
     """Expose OpenRouter through the Gemini-style interface used by reports."""
 
-    MAX_CONTINUATIONS = 2
+    MAX_CONTINUATIONS = 5
+    MAX_RETRIES = 3
 
-    def __init__(self, api_key: str, model_name: str):
+    def __init__(
+        self,
+        api_key: str,
+        model_name: str,
+        max_output_tokens: int | None = None,
+        supports_reasoning: bool = True,
+    ):
         self.api_key = api_key
         self.model_name = model_name
+        self.max_output_tokens = min(
+            max_output_tokens or OPENROUTER_REQUEST_OUTPUT_TOKENS,
+            OPENROUTER_REQUEST_OUTPUT_TOKENS,
+        )
+        self.supports_reasoning = supports_reasoning
 
     def generate_content(self, prompt: str) -> _GeneratedContent:
         messages = [{"role": "user", "content": prompt}]
@@ -46,8 +65,10 @@ class OpenRouterModel:
             if continuation == self.MAX_CONTINUATIONS:
                 raise OpenRouterError(
                     "The selected model could not complete this report within "
-                    "three responses. Choose a model with a larger output limit."
+                    "six responses. No partial report was shown. Try the "
+                    "automatic free router or a model with a larger output limit."
                 )
+            final_attempt = continuation == self.MAX_CONTINUATIONS - 1
             messages.extend([
                 {"role": "assistant", "content": text},
                 {
@@ -56,54 +77,136 @@ class OpenRouterModel:
                         "Continue from the exact point where the report stopped. "
                         "Do not repeat prior content, restart the report, or add "
                         "commentary. Complete every remaining required section."
+                        + (
+                            " Be concise and finish all remaining sections in "
+                            "this response."
+                            if final_attempt else ""
+                        )
                     ),
                 },
             ])
 
         raise OpenRouterError("OpenRouter could not complete the report.")
 
-    def _generate_part(self, messages: list[dict[str, str]]) -> tuple[str, str | None]:
-        try:
-            response = requests.post(
-                f"{OPENROUTER_API_URL}/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {self.api_key}",
-                    "Content-Type": "application/json",
-                    "HTTP-Referer": "https://semai-gsc-v4.streamlit.app/",
-                    "X-OpenRouter-Title": "SEMAI Analytics Intelligence",
-                },
-                json={
-                    "model": self.model_name,
-                    "messages": messages,
-                    "temperature": 0.2,
-                    "max_tokens": 16384,
-                    "reasoning": {
-                        "effort": "low",
-                        "exclude": True,
+    @staticmethod
+    def _retry_delay(response: requests.Response | None, attempt: int) -> float:
+        retry_after = (
+            response.headers.get("Retry-After")
+            if response is not None else None
+        )
+        if retry_after:
+            try:
+                return min(max(float(retry_after), 0.5), 30.0)
+            except ValueError:
+                try:
+                    retry_at = parsedate_to_datetime(retry_after)
+                    if retry_at.tzinfo is None:
+                        retry_at = retry_at.replace(tzinfo=timezone.utc)
+                    seconds = (retry_at - datetime.now(timezone.utc)).total_seconds()
+                    return min(max(seconds, 0.5), 30.0)
+                except (TypeError, ValueError, OverflowError):
+                    pass
+        return min(2 ** attempt + random.uniform(0, 0.5), 12.0)
+
+    def _request(
+        self,
+        messages: list[dict[str, str]],
+        model_name: str,
+        max_tokens: int | None = None,
+    ) -> requests.Response:
+        request_body: dict[str, object] = {
+            "model": model_name,
+            "messages": messages,
+            "temperature": 0.2,
+            "max_tokens": max_tokens or self.max_output_tokens,
+        }
+        if self.supports_reasoning:
+            request_body["reasoning"] = {
+                "effort": "low",
+                "exclude": True,
+            }
+
+        last_exception: requests.RequestException | None = None
+        last_response: requests.Response | None = None
+        for attempt in range(self.MAX_RETRIES + 1):
+            try:
+                response = requests.post(
+                    f"{OPENROUTER_API_URL}/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {self.api_key}",
+                        "Content-Type": "application/json",
+                        "HTTP-Referer": "https://semai-gsc-v4.streamlit.app/",
+                        "X-OpenRouter-Title": "SEMAI Analytics Intelligence",
                     },
-                },
-                timeout=180,
+                    json=request_body,
+                    timeout=(15, 240),
+                )
+                last_response = response
+                if response.status_code not in _TRANSIENT_STATUS_CODES:
+                    return response
+            except (requests.ConnectionError, requests.Timeout) as exc:
+                last_exception = exc
+            except requests.RequestException as exc:
+                raise OpenRouterError(
+                    "OpenRouter could not be reached. Try again shortly."
+                ) from exc
+
+            if attempt < self.MAX_RETRIES:
+                time.sleep(self._retry_delay(last_response, attempt))
+
+        if last_response is not None:
+            return last_response
+        raise OpenRouterError(
+            "OpenRouter could not be reached after several attempts. "
+            "Try again shortly."
+        ) from last_exception
+
+    def _generate_part(
+        self,
+        messages: list[dict[str, str]],
+        allow_fallback: bool = True,
+        max_tokens: int | None = None,
+    ) -> tuple[str, str | None]:
+        model_names = [self.model_name]
+        if allow_fallback and self.model_name != OPENROUTER_FREE_ROUTER:
+            model_names.append(OPENROUTER_FREE_ROUTER)
+
+        response: requests.Response | None = None
+        for index, model_name in enumerate(model_names):
+            response = self._request(messages, model_name, max_tokens)
+            if response.ok:
+                break
+            can_fallback = (
+                index + 1 < len(model_names)
+                and response.status_code in _TRANSIENT_STATUS_CODES | {404}
             )
-        except requests.RequestException as exc:
-            raise OpenRouterError(
-                "OpenRouter could not be reached. Try again shortly."
-            ) from exc
+            if not can_fallback:
+                break
+
+        if response is None:
+            raise OpenRouterError("OpenRouter returned no response.")
         try:
             response.raise_for_status()
         except requests.HTTPError as exc:
-            messages = {
+            error_messages = {
                 401: "OpenRouter rejected the server API key. Replace it in Streamlit Secrets.",
                 402: "OpenRouter requires credits for this request or model.",
                 404: "The selected OpenRouter model is no longer available.",
-                429: "OpenRouter is temporarily rate limited. Try again shortly.",
+                429: (
+                    "OpenRouter's free-tier request limit is currently exhausted, "
+                    "even after automatic retries and fallback routing. Wait for "
+                    "the limit to reset or add OpenRouter credits."
+                ),
             }
-            message = messages.get(
+            message = error_messages.get(
                 response.status_code,
                 f"OpenRouter request failed with status {response.status_code}.",
             )
             raise OpenRouterError(message) from exc
         try:
             payload = response.json()
+            if payload.get("error"):
+                raise KeyError("error response")
             choice = payload["choices"][0]
             message = choice["message"]
             text = message.get("content")
@@ -132,30 +235,47 @@ class OpenRouterModel:
 
     def test_connection(self) -> str:
         """Run a minimal completion through the selected backend model."""
-        result = self.generate_content("Reply with exactly: OK")
-        return result.text
+        messages = [{"role": "user", "content": "Reply with exactly: OK"}]
+        text, _ = self._generate_part(
+            messages,
+            allow_fallback=False,
+            max_tokens=16,
+        )
+        return text
 
 
 def list_openrouter_free_models() -> list[dict[str, object]]:
-    """Return the currently advertised zero-cost text models."""
+    """Return free text models with enough capacity for full reports."""
     response = requests.get(f"{OPENROUTER_API_URL}/models", timeout=20)
     response.raise_for_status()
     models = []
     for model in response.json().get("data", []):
         pricing = model.get("pricing", {})
+        architecture = model.get("architecture") or {}
+        input_modalities = architecture.get("input_modalities") or []
+        output_modalities = architecture.get("output_modalities") or []
+        supported_parameters = model.get("supported_parameters") or []
+        top_provider = model.get("top_provider") or {}
+        context_length = (
+            top_provider.get("context_length") or model.get("context_length")
+        )
+        max_completion_tokens = top_provider.get("max_completion_tokens")
         if (
             str(pricing.get("prompt")) == "0"
             and str(pricing.get("completion")) == "0"
             and model.get("id")
+            and "text" in input_modalities
+            and "text" in output_modalities
+            and "max_tokens" in supported_parameters
+            and (context_length or 0) >= OPENROUTER_MIN_CONTEXT_TOKENS
+            and (max_completion_tokens or 0)
+            >= OPENROUTER_REQUEST_OUTPUT_TOKENS
         ):
-            top_provider = model.get("top_provider") or {}
             models.append({
                 "id": model["id"],
                 "name": model.get("name") or model["id"],
-                "context_length": top_provider.get("context_length")
-                or model.get("context_length"),
-                "max_completion_tokens": top_provider.get(
-                    "max_completion_tokens"
-                ),
+                "context_length": context_length,
+                "max_completion_tokens": max_completion_tokens,
+                "supports_reasoning": "reasoning" in supported_parameters,
             })
     return sorted(models, key=lambda item: item["name"].lower())

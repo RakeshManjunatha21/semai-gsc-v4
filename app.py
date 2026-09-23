@@ -134,6 +134,7 @@ def get_openrouter_free_model_options() -> list[dict[str, object]]:
         "name": "Free Models Router (automatic)",
         "context_length": 200_000,
         "max_completion_tokens": None,
+        "supports_reasoning": True,
     }
     return [router, *(
         model for model in models
@@ -2293,11 +2294,19 @@ with st.sidebar:
                 )
             else:
                 st.caption(
-                    "This app requests up to 16,384 output tokens per response."
+                    "Only report-capable text models are listed. The app retries "
+                    "temporary failures and requests up to 16,384 output tokens "
+                    "per response."
                 )
             selected_llm = OpenRouterModel(
                 OPENROUTER_API_KEY or "",
                 selected_model_id,
+                max_output_tokens=(
+                    int(output_limit) if output_limit is not None else None
+                ),
+                supports_reasoning=bool(
+                    selected_model.get("supports_reasoning", False)
+                ),
             )
             llm_ready = bool(OPENROUTER_API_KEY)
             if not OPENROUTER_API_KEY:
