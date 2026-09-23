@@ -7,6 +7,7 @@ live in their respective packages (``config``, ``auth``, ``services``).
 """
 
 import json
+import re
 import zipfile
 from datetime import date, timedelta
 from io import BytesIO
@@ -239,13 +240,76 @@ def handle_callback():
         st.session_state.oauth_flow = None
 
 
+def _normalize_report_markdown(report: str) -> str:
+    """Repair common model-generated Markdown formatting defects."""
+    lines = report.splitlines()
+    table_lines: set[int] = set()
+    table_separator = re.compile(
+        r"^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)+\|?\s*$"
+    )
+
+    for index in range(1, len(lines)):
+        if not table_separator.match(lines[index]):
+            continue
+        table_start = index - 1
+        table_end = index + 1
+        while table_end < len(lines) and "|" in lines[table_end]:
+            table_end += 1
+        table_lines.update(range(table_start, table_end))
+
+    normalized: list[str] = []
+    decoration = re.compile(r"^[\s=_\-─═|]+$")
+    section_banner = re.compile(
+        r"\b(SECTION\s+\d+\s*:\s*[^=═─]+)", re.IGNORECASE
+    )
+    week_banner = re.compile(
+        r"^\**(WEEK\s+\d+(?:\s*[-–]\s*\d+)?\s*:[^|_=─═]+)",
+        re.IGNORECASE,
+    )
+
+    for index, raw_line in enumerate(lines):
+        line = raw_line.strip()
+        if index in table_lines or not line:
+            normalized.append(raw_line)
+            continue
+
+        section_match = section_banner.search(line)
+        if section_match and decoration.sub("", line.replace(
+            section_match.group(0), ""
+        )) == "":
+            normalized.append(f"## {section_match.group(1).strip()}")
+            continue
+
+        week_match = week_banner.match(line)
+        if week_match:
+            normalized.append(f"### {week_match.group(1).strip()}")
+            continue
+
+        if decoration.fullmatch(line):
+            continue
+
+        if "|" in line:
+            cells = [
+                cell.strip()
+                for cell in re.split(r"\|+", line.strip(" |"))
+                if cell.strip() and not decoration.fullmatch(cell.strip())
+            ]
+            if cells:
+                normalized.append(f"- {'; '.join(cells)}")
+            continue
+
+        normalized.append(raw_line)
+
+    return "\n".join(normalized)
+
+
 def render_report_clean(
     report: str,
     container_key: str | None = None,
     skip_first_h1: bool = False,
 ):
     """Render a complete Markdown report in one stable document block."""
-    lines = report.splitlines()
+    lines = _normalize_report_markdown(report).splitlines()
     if skip_first_h1:
         first_h1_index = next((
             index for index, line in enumerate(lines)
