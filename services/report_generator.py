@@ -52,6 +52,15 @@ class ReportGenerator:
     # GSC Reports
     # -----------------------------------------------------------------
 
+    @staticmethod
+    def _gsc_model_payload(payload: dict) -> dict:
+        """Return the summarized GSC payload used in model prompts."""
+        return {
+            key: value
+            for key, value in payload.items()
+            if key != "raw_query_page_data"
+        }
+
     def generate_deep_audit(self, payload: dict) -> str:
         """Generate a Deep Audit Report from GSC data.
 
@@ -62,12 +71,13 @@ class ReportGenerator:
         Returns:
             Markdown report string.
         """
+        model_payload = self._gsc_model_payload(payload)
         prompt_text = f"""
 {DEEP_AUDIT_PROMPT}
 
 --- ACTUAL GSC DATA TO ANALYZE ---
 
-{json.dumps(payload, indent=2)}
+{json.dumps(model_payload, indent=2)}
 
 --- BEGIN ANALYSIS NOW ---
 
@@ -88,6 +98,7 @@ START YOUR RESPONSE NOW:
         Returns:
             Markdown report string.
         """
+        model_payload = self._gsc_model_payload(payload)
         prompt_text = f"""
 {CLUSTER_AUDIT_PROMPT}
 
@@ -96,7 +107,7 @@ START YOUR RESPONSE NOW:
 This is the COMPLETE Google Search Console dataset.
 Do NOT hallucinate or infer missing data.
 
-{json.dumps(payload, indent=2)}
+{json.dumps(model_payload, indent=2)}
 
 --- TASK ---
 
@@ -122,6 +133,7 @@ BEGIN REPORT:
         Returns:
             Markdown report string.
         """
+        model_payload = self._gsc_model_payload(payload)
         prompt_text = f"""
 {ACTION_REPORT_PROMPT}
 
@@ -136,7 +148,7 @@ to generate the GSC Action Report.
 
 Additional raw GSC data for cross-referencing:
 
-{json.dumps(payload, indent=2)}
+{json.dumps(model_payload, indent=2)}
 
 --- BEGIN GSC ACTION REPORT NOW ---
 
@@ -170,16 +182,18 @@ START YOUR RESPONSE NOW:
         Returns:
             Markdown report string.
         """
+        model_payload1 = self._gsc_model_payload(payload1)
+        model_payload2 = self._gsc_model_payload(payload2)
         prompt_text = f"""
 {COMPARISON_PROMPT}
 
 --- PERIOD 1 DATA ---
 
-{json.dumps(payload1, indent=2)}
+{json.dumps(model_payload1, indent=2)}
 
 --- PERIOD 2 DATA ---
 
-{json.dumps(payload2, indent=2)}
+{json.dumps(model_payload2, indent=2)}
 
 --- CALCULATED COMPARISON METRICS ---
 

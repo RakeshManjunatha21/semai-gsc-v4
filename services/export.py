@@ -26,6 +26,48 @@ except ImportError:
 _EXCEL_MAX_DATA_ROWS = 1_048_575
 
 
+def create_gsc_excel_export(payload: dict) -> BytesIO:
+    """Build an Excel workbook containing the complete GSC extraction."""
+    buffer = BytesIO()
+    overview = {
+        "site_url": payload.get("site_url", ""),
+        "start_date": payload.get("date_range", {}).get("start", ""),
+        "end_date": payload.get("date_range", {}).get("end", ""),
+        **payload.get("summary_metrics", {}),
+    }
+    datasets = {
+        "Raw Query Page Data": payload.get("raw_query_page_data", []),
+        "Queries by Impressions": payload.get(
+            "top_queries_by_impressions", []
+        ),
+        "Queries by Clicks": payload.get("top_queries_by_clicks", []),
+        "Top Pages": payload.get("top_pages", []),
+    }
+
+    with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+        pd.DataFrame([overview]).to_excel(
+            writer, sheet_name="Summary", index=False
+        )
+        for sheet_name, rows in datasets.items():
+            dataframe = pd.DataFrame(rows)
+            chunks = max(
+                1,
+                (len(dataframe) + _EXCEL_MAX_DATA_ROWS - 1)
+                // _EXCEL_MAX_DATA_ROWS,
+            )
+            for chunk_index in range(chunks):
+                suffix = f" {chunk_index + 1}" if chunks > 1 else ""
+                chunk_sheet_name = f"{sheet_name[:31 - len(suffix)]}{suffix}"
+                start = chunk_index * _EXCEL_MAX_DATA_ROWS
+                end = start + _EXCEL_MAX_DATA_ROWS
+                dataframe.iloc[start:end].to_excel(
+                    writer, sheet_name=chunk_sheet_name, index=False
+                )
+
+    buffer.seek(0)
+    return buffer
+
+
 def create_ga4_excel_export(payload: dict) -> BytesIO:
     """Build an Excel workbook containing every extracted GA4 dataset."""
     buffer = BytesIO()

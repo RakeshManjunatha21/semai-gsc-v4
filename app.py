@@ -47,6 +47,7 @@ from services.llm import (
 )
 from services.export import (
     create_ga4_excel_export,
+    create_gsc_excel_export,
     create_word_document,
     process_uploaded_files,
     process_direct_files,
@@ -3169,6 +3170,19 @@ if st.session_state.deep_audit_report:
                     )
         else:
             st.info("⏳ Action Report is being generated...")
+
+    st.markdown("")
+    gsc_excel = create_gsc_excel_export(
+        st.session_state.deep_audit_payload
+    )
+    st.download_button(
+        "Download Complete Raw GSC Extract (Excel)",
+        gsc_excel,
+        f"gsc_raw_extract_{da_start.strftime('%Y%m%d')}_{da_end.strftime('%Y%m%d')}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        use_container_width=True,
+        key="gsc_raw_excel_dl",
+    )
 
     st.markdown("")
     if st.button("Clear Reports", use_container_width=False, key="clear_deep_audit_reports"):

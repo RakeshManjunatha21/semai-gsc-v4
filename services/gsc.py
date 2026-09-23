@@ -149,6 +149,7 @@ def extract_payload(
             .head(20)
             .to_dict("records")
         ),
+        "raw_query_page_data": df.to_dict("records"),
     }
 
 
