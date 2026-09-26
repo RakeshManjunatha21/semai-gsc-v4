@@ -2439,7 +2439,15 @@ with st.sidebar:
                                 f"model. Details: {exc}"
                             )
                             st.rerun()
-                        st.error(str(exc))
+                        if exc.temporary:
+                            st.warning(
+                                "OpenRouter is busy, so the selected model could "
+                                "not be verified right now. No action is needed: "
+                                "reports retry automatically and use Gemini when "
+                                "OpenRouter remains unavailable."
+                            )
+                        else:
+                            st.error(str(exc))
                     else:
                         st.success("OpenRouter and the selected model are working.")
             if quarantined_models and st.button(

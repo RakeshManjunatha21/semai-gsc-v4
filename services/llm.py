@@ -26,9 +26,16 @@ class _GeneratedContent:
 class OpenRouterError(RuntimeError):
     """A safe error that can be shown directly in the application UI."""
 
-    def __init__(self, message: str, *, model_unavailable: bool = False):
+    def __init__(
+        self,
+        message: str,
+        *,
+        model_unavailable: bool = False,
+        temporary: bool = False,
+    ):
         super().__init__(message)
         self.model_unavailable = model_unavailable
+        self.temporary = temporary
 
 
 class GeminiError(RuntimeError):
@@ -287,7 +294,8 @@ class OpenRouterModel:
                 last_exception = exc
             except requests.RequestException as exc:
                 raise OpenRouterError(
-                    "OpenRouter could not be reached. Try again shortly."
+                    "OpenRouter could not be reached. Try again shortly.",
+                    temporary=True,
                 ) from exc
 
             if attempt < self.MAX_RETRIES:
@@ -297,7 +305,8 @@ class OpenRouterModel:
             return last_response
         raise OpenRouterError(
             "OpenRouter could not be reached after several attempts. "
-            "Try again shortly."
+            "Try again shortly.",
+            temporary=True,
         ) from last_exception
 
     def _generate_part(
@@ -346,6 +355,7 @@ class OpenRouterModel:
             raise OpenRouterError(
                 message,
                 model_unavailable=response.status_code == 404,
+                temporary=response.status_code in _TRANSIENT_STATUS_CODES,
             ) from exc
         try:
             payload = response.json()
