@@ -24,6 +24,7 @@ from config import (
     GEMINI_API_KEY,
     GEMINI_MODEL_NAME,
     OPENROUTER_API_KEY,
+    OPENROUTER_API_KEYS,
     configure_model,
     ENABLE_TOKEN_PERSISTENCE,
 )
@@ -218,7 +219,7 @@ def generate_report(operation, *args):
             )
             try:
                 fallback_model = OpenRouterModel(
-                    OPENROUTER_API_KEY,
+                    OPENROUTER_API_KEYS,
                     OPENROUTER_FREE_ROUTER,
                 )
                 fallback_operation = getattr(
@@ -2411,7 +2412,7 @@ with st.sidebar:
                     "per response."
                 )
             selected_llm = OpenRouterModel(
-                OPENROUTER_API_KEY or "",
+                OPENROUTER_API_KEYS,
                 selected_model_id,
                 max_output_tokens=(
                     int(output_limit) if output_limit is not None else None

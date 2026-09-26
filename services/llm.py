@@ -177,12 +177,15 @@ class OpenRouterModel:
 
     def __init__(
         self,
-        api_key: str,
+        api_key: str | tuple[str, ...] | list[str],
         model_name: str,
         max_output_tokens: int | None = None,
         supports_reasoning: bool = True,
     ):
-        self.api_key = api_key
+        supplied_keys = [api_key] if isinstance(api_key, str) else list(api_key)
+        self.api_keys = tuple(dict.fromkeys(key for key in supplied_keys if key))
+        self.api_key = self.api_keys[0] if self.api_keys else ""
+        self._api_key_index = 0
         self.model_name = model_name
         self.max_output_tokens = min(
             max_output_tokens or OPENROUTER_REQUEST_OUTPUT_TOKENS,
@@ -274,32 +277,42 @@ class OpenRouterModel:
 
         last_exception: requests.RequestException | None = None
         last_response: requests.Response | None = None
-        for attempt in range(self.MAX_RETRIES + 1):
-            try:
-                response = requests.post(
-                    f"{OPENROUTER_API_URL}/chat/completions",
-                    headers={
-                        "Authorization": f"Bearer {self.api_key}",
-                        "Content-Type": "application/json",
-                        "HTTP-Referer": "https://semai-gsc-v4.streamlit.app/",
-                        "X-OpenRouter-Title": "SEMAI Analytics Intelligence",
-                    },
-                    json=request_body,
-                    timeout=(15, 240),
-                )
-                last_response = response
-                if response.status_code not in _TRANSIENT_STATUS_CODES:
-                    return response
-            except (requests.ConnectionError, requests.Timeout) as exc:
-                last_exception = exc
-            except requests.RequestException as exc:
-                raise OpenRouterError(
-                    "OpenRouter could not be reached. Try again shortly.",
-                    temporary=True,
-                ) from exc
+        key_count = len(self.api_keys) or 1
+        for key_offset in range(key_count):
+            key_index = (self._api_key_index + key_offset) % key_count
+            api_key = self.api_keys[key_index] if self.api_keys else ""
+            for attempt in range(self.MAX_RETRIES + 1):
+                try:
+                    response = requests.post(
+                        f"{OPENROUTER_API_URL}/chat/completions",
+                        headers={
+                            "Authorization": f"Bearer {api_key}",
+                            "Content-Type": "application/json",
+                            "HTTP-Referer": "https://semai-gsc-v4.streamlit.app/",
+                            "X-OpenRouter-Title": "SEMAI Analytics Intelligence",
+                        },
+                        json=request_body,
+                        timeout=(15, 240),
+                    )
+                    last_response = response
+                    if response.ok:
+                        self._api_key_index = key_index
+                        self.api_key = api_key
+                        return response
+                    if response.status_code in {401, 402, 429} and key_offset + 1 < key_count:
+                        break
+                    if response.status_code not in _TRANSIENT_STATUS_CODES:
+                        return response
+                except (requests.ConnectionError, requests.Timeout) as exc:
+                    last_exception = exc
+                except requests.RequestException as exc:
+                    raise OpenRouterError(
+                        "OpenRouter could not be reached. Try again shortly.",
+                        temporary=True,
+                    ) from exc
 
-            if attempt < self.MAX_RETRIES:
-                time.sleep(self._retry_delay(last_response, attempt))
+                if attempt < self.MAX_RETRIES:
+                    time.sleep(self._retry_delay(last_response, attempt))
 
         if last_response is not None:
             return last_response

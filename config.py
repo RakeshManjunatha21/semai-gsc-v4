@@ -124,7 +124,15 @@ def load_gemini_api_key() -> str | None:
 
 
 GEMINI_API_KEY = load_gemini_api_key()
-OPENROUTER_API_KEY = get_setting("OPENROUTER_API_KEY")
+OPENROUTER_API_KEYS = tuple(dict.fromkeys(
+    key
+    for key in (
+        get_setting("OPENROUTER_API_KEY"),
+        get_setting("OPENROUTER_API_KEY_2"),
+    )
+    if key
+))
+OPENROUTER_API_KEY = OPENROUTER_API_KEYS[0] if OPENROUTER_API_KEYS else None
 GEMINI_MODEL_NAME = get_setting("GEMINI_MODEL", "gemini-3-flash-preview")
 
 

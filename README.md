@@ -144,6 +144,9 @@ Use this flow when you want deployment without pushing tokens or credential file
    - `GOOGLE_OAUTH_CLIENT_ID`
    - `GOOGLE_OAUTH_CLIENT_SECRET`
    - `ENABLE_TOKEN_PERSISTENCE = "false"`
+- For OpenRouter with automatic key rotation, also set:
+   - `OPENROUTER_API_KEY`
+   - `OPENROUTER_API_KEY_2` (optional secondary key)
 
 ### 4. Configure Google OAuth correctly
 - In Google Cloud Console -> OAuth 2.0 Client:
