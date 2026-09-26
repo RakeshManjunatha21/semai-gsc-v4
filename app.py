@@ -21,6 +21,7 @@ import streamlit as st
 from config import (
     ADMIN_PASSWORD,
     GEMINI_API_KEY,
+    GEMINI_MODEL_NAME,
     OPENROUTER_API_KEY,
     configure_model,
     ENABLE_TOKEN_PERSISTENCE,
@@ -41,6 +42,7 @@ from services.gsc import (
 )
 from services.report_generator import ReportGenerator
 from services.llm import (
+    GeminiError,
     OPENROUTER_FREE_ROUTER,
     OpenRouterError,
     OpenRouterModel,
@@ -147,6 +149,56 @@ def generate_report(operation, *args):
     try:
         return operation(*args)
     except OpenRouterError as exc:
+        if MODEL is not None:
+            st.warning(
+                "OpenRouter is unavailable. Retrying this report with Gemini."
+            )
+            try:
+                fallback_operation = getattr(
+                    ReportGenerator(model=MODEL), operation.__name__
+                )
+                return fallback_operation(*args)
+            except GeminiError as fallback_exc:
+                st.error(
+                    "Both AI providers are currently unavailable. "
+                    f"OpenRouter: {exc} Gemini: {fallback_exc}"
+                )
+                st.stop()
+            except Exception:
+                st.error(
+                    "OpenRouter failed and the Gemini fallback encountered an "
+                    "unexpected error. Try again shortly."
+                )
+                st.stop()
+        st.error(str(exc))
+        st.stop()
+    except GeminiError as exc:
+        if OPENROUTER_API_KEY:
+            st.warning(
+                "Gemini is unavailable. Retrying this report with OpenRouter's "
+                "automatic free router."
+            )
+            try:
+                fallback_model = OpenRouterModel(
+                    OPENROUTER_API_KEY,
+                    OPENROUTER_FREE_ROUTER,
+                )
+                fallback_operation = getattr(
+                    ReportGenerator(model=fallback_model), operation.__name__
+                )
+                return fallback_operation(*args)
+            except OpenRouterError as fallback_exc:
+                st.error(
+                    "Both AI providers are currently unavailable. "
+                    f"Gemini: {exc} OpenRouter: {fallback_exc}"
+                )
+                st.stop()
+            except Exception:
+                st.error(
+                    "Gemini failed and the OpenRouter fallback encountered an "
+                    "unexpected error. Try again shortly."
+                )
+                st.stop()
         st.error(str(exc))
         st.stop()
     except Exception as exc:
@@ -2325,10 +2377,22 @@ with st.sidebar:
                         st.success("OpenRouter and the selected model are working.")
         else:
             selected_llm = MODEL
-            st.caption("Gemini 3 Flash Preview")
+            st.caption(GEMINI_MODEL_NAME)
             llm_ready = bool(GEMINI_API_KEY)
             if not GEMINI_API_KEY:
                 st.warning("Gemini is not configured on the server.")
+            elif st.button(
+                "Test Gemini connection",
+                use_container_width=True,
+                key="test_gemini_model",
+            ):
+                with st.spinner("Testing Gemini..."):
+                    try:
+                        selected_llm.test_connection()
+                    except GeminiError as exc:
+                        st.error(str(exc))
+                    else:
+                        st.success("Gemini and the configured model are working.")
 
     st.divider()
     st.markdown("### About")
@@ -3083,6 +3147,14 @@ if deep_audit_btn:
     with st.spinner("Generating Deep Audit Report..."):
         report = generate_report(report_gen.generate_deep_audit, payload)
 
+    st.session_state.deep_audit_report = report
+    st.session_state.action_report = None
+    st.session_state.deep_audit_payload = payload
+    st.session_state.deep_audit_site_url = site_url
+    st.session_state.deep_audit_start_date = start_date
+    st.session_state.deep_audit_end_date = end_date
+    st.session_state.deep_audit_days_diff = days_diff
+
     with st.spinner("Generating GSC Action Report..."):
         action_rpt = generate_report(
             report_gen.generate_action_report,
@@ -3090,13 +3162,7 @@ if deep_audit_btn:
             payload,
         )
 
-    st.session_state.deep_audit_report = report
     st.session_state.action_report = action_rpt
-    st.session_state.deep_audit_payload = payload
-    st.session_state.deep_audit_site_url = site_url
-    st.session_state.deep_audit_start_date = start_date
-    st.session_state.deep_audit_end_date = end_date
-    st.session_state.deep_audit_days_diff = days_diff
 
 # Display Deep Audit + Action Report if available
 if st.session_state.deep_audit_report:
@@ -3242,7 +3308,24 @@ if st.session_state.deep_audit_report:
                         key="action_report_md_dl_fallback",
                     )
         else:
-            st.info("⏳ Action Report is being generated...")
+            st.info(
+                "The Deep Audit is saved, but the GSC Action Report has not "
+                "completed yet. Retry only this report without extracting data "
+                "or regenerating the Deep Audit."
+            )
+            if st.button(
+                "Retry GSC Action Report",
+                use_container_width=True,
+                key="retry_action_report",
+                disabled=not llm_ready,
+            ):
+                with st.spinner("Generating GSC Action Report..."):
+                    st.session_state.action_report = generate_report(
+                        report_gen.generate_action_report,
+                        da_report,
+                        st.session_state.deep_audit_payload,
+                    )
+                st.rerun()
 
     st.markdown("")
     gsc_excel = create_gsc_excel_export(

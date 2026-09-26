@@ -27,6 +27,137 @@ class OpenRouterError(RuntimeError):
     """A safe error that can be shown directly in the application UI."""
 
 
+class GeminiError(RuntimeError):
+    """A safe Gemini error that can be shown directly in the UI."""
+
+
+class GeminiModel:
+    """Add retries, deadlines, and continuation to a Gemini model."""
+
+    MAX_CONTINUATIONS = 5
+    MAX_RETRIES = 3
+
+    def __init__(self, model, request_timeout: int = 180):
+        self._model = model
+        self.request_timeout = request_timeout
+
+    @staticmethod
+    def _finish_reason(response) -> str:
+        candidates = getattr(response, "candidates", None) or []
+        if not candidates:
+            return ""
+        finish_reason = getattr(candidates[0], "finish_reason", "")
+        return str(getattr(finish_reason, "name", finish_reason)).upper()
+
+    @staticmethod
+    def _safe_text(response) -> str:
+        try:
+            return response.text or ""
+        except (AttributeError, ValueError):
+            return ""
+
+    @staticmethod
+    def _is_transient(exc: Exception) -> bool:
+        return exc.__class__.__name__ in {
+            "BadGateway",
+            "DeadlineExceeded",
+            "GatewayTimeout",
+            "InternalServerError",
+            "ResourceExhausted",
+            "ServiceUnavailable",
+            "TooManyRequests",
+        }
+
+    @staticmethod
+    def _error_message(exc: Exception) -> str:
+        error_name = exc.__class__.__name__
+        if error_name in {"ResourceExhausted", "TooManyRequests"}:
+            return (
+                "Gemini's request quota is currently exhausted after automatic "
+                "retries. Wait for the quota to reset or check the Gemini API "
+                "billing and rate-limit settings."
+            )
+        if error_name in {"DeadlineExceeded", "GatewayTimeout"}:
+            return (
+                "Gemini did not finish before the request deadline after "
+                "automatic retries. Try the report again shortly."
+            )
+        if error_name in {"PermissionDenied", "Unauthenticated"}:
+            return (
+                "Gemini rejected the server API key. Replace it in Streamlit "
+                "Secrets and confirm the Generative Language API is enabled."
+            )
+        if error_name in {"InvalidArgument", "NotFound"}:
+            return (
+                "The configured Gemini model or request is not available. "
+                "Check the Gemini model setting in Streamlit Secrets."
+            )
+        return "Gemini could not generate the report. Try again shortly."
+
+    def _send(self, chat, message: str):
+        last_exception: Exception | None = None
+        for attempt in range(self.MAX_RETRIES + 1):
+            try:
+                return chat.send_message(
+                    message,
+                    request_options={"timeout": self.request_timeout},
+                )
+            except Exception as exc:
+                last_exception = exc
+                if not self._is_transient(exc) or attempt == self.MAX_RETRIES:
+                    raise GeminiError(self._error_message(exc)) from exc
+                time.sleep(min(2 ** attempt + random.uniform(0, 0.5), 8.0))
+        raise GeminiError("Gemini could not generate the report.") from last_exception
+
+    def generate_content(self, prompt: str) -> _GeneratedContent:
+        chat = self._model.start_chat(history=[])
+        text_parts: list[str] = []
+        message = prompt
+        for continuation in range(self.MAX_CONTINUATIONS + 1):
+            response = self._send(chat, message)
+            text = self._safe_text(response)
+            finish_reason = self._finish_reason(response)
+            if text:
+                text_parts.append(text.rstrip())
+
+            if finish_reason in {"STOP", "1"}:
+                if not text_parts:
+                    raise GeminiError(
+                        "Gemini returned no report text. The response may have "
+                        "been blocked; try again or choose another provider."
+                    )
+                return _GeneratedContent(text="\n\n".join(text_parts).strip())
+            if finish_reason not in {"MAX_TOKENS", "2"}:
+                raise GeminiError(
+                    "Gemini stopped before completing the report "
+                    f"({finish_reason or 'unknown reason'}). No partial report "
+                    "was shown."
+                )
+            if continuation == self.MAX_CONTINUATIONS:
+                raise GeminiError(
+                    "Gemini could not complete this report within six responses. "
+                    "No partial report was shown."
+                )
+            message = (
+                "Continue from the exact point where the report stopped. Do not "
+                "repeat prior content or restart the report. Complete every "
+                "remaining required section."
+            )
+
+        raise GeminiError("Gemini could not complete the report.")
+
+    def test_connection(self) -> str:
+        """Run a minimal completion against Gemini."""
+        response = self._send(
+            self._model.start_chat(history=[]),
+            "Reply with exactly: OK",
+        )
+        text = self._safe_text(response)
+        if not text:
+            raise GeminiError("Gemini returned no text for the connection test.")
+        return text
+
+
 class OpenRouterModel:
     """Expose OpenRouter through the Gemini-style interface used by reports."""
 

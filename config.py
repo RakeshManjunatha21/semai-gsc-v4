@@ -10,6 +10,8 @@ from pathlib import Path
 import google.generativeai as genai
 from dotenv import load_dotenv
 
+from services.llm import GeminiModel
+
 # =============================================================================
 # Application Constants
 # =============================================================================
@@ -123,9 +125,10 @@ def load_gemini_api_key() -> str | None:
 
 GEMINI_API_KEY = load_gemini_api_key()
 OPENROUTER_API_KEY = get_setting("OPENROUTER_API_KEY")
+GEMINI_MODEL_NAME = get_setting("GEMINI_MODEL", "gemini-3-flash-preview")
 
 
-def configure_model() -> genai.GenerativeModel | None:
+def configure_model() -> GeminiModel | None:
     """Configure and return the Gemini generative model.
 
     Returns:
@@ -138,13 +141,13 @@ def configure_model() -> genai.GenerativeModel | None:
     genai.configure(api_key=GEMINI_API_KEY)
 
     model = genai.GenerativeModel(
-        model_name="gemini-3-flash-preview",
+        model_name=GEMINI_MODEL_NAME,
         generation_config={
             "temperature": 0.2,
             "max_output_tokens": 8192,
         },
     )
-    return model
+    return GeminiModel(model)
 
 
 MODEL = configure_model()
