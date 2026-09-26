@@ -8,6 +8,7 @@ live in their respective packages (``config``, ``auth``, ``services``).
 
 import json
 import re
+import time
 import zipfile
 from datetime import date, timedelta
 from io import BytesIO
@@ -103,6 +104,8 @@ _SESSION_DEFAULTS = {
     "oauth_code_verifier": None,
     "oauth_state": None,
     "oauth_flow": None,
+    "openrouter_quarantined_models": {},
+    "openrouter_model_notice": None,
 }
 
 for key, default in _SESSION_DEFAULTS.items():
@@ -144,11 +147,46 @@ def get_openrouter_free_model_options() -> list[dict[str, object]]:
     )]
 
 
+def quarantine_openrouter_model(model, error: OpenRouterError) -> bool:
+    """Temporarily hide a named OpenRouter model after a live failure."""
+    if not isinstance(model, OpenRouterModel):
+        return False
+    if model.model_name == OPENROUTER_FREE_ROUTER:
+        return False
+    if not error.model_unavailable:
+        return False
+    st.session_state.openrouter_quarantined_models[model.model_name] = {
+        "until": time.time() + 900,
+        "reason": str(error),
+    }
+    return True
+
+
 def generate_report(operation, *args):
     """Run a report model call and show safe provider errors in the UI."""
+    report_generator = getattr(operation, "__self__", None)
+    selected_model = getattr(report_generator, "_model", None)
     try:
-        return operation(*args)
+        report = operation(*args)
+        if getattr(
+            selected_model, "fallback_from_unavailable_model", False
+        ):
+            unavailable_error = OpenRouterError(
+                "The selected OpenRouter model is no longer available.",
+                model_unavailable=True,
+            )
+            if quarantine_openrouter_model(selected_model, unavailable_error):
+                st.session_state.openrouter_model_notice = (
+                    "The selected model became unavailable and was removed for "
+                    "15 minutes. OpenRouter's automatic router completed the report."
+                )
+        return report
     except OpenRouterError as exc:
+        if quarantine_openrouter_model(selected_model, exc):
+            st.session_state.openrouter_model_notice = (
+                "The selected OpenRouter model failed during report generation "
+                "and was removed for 15 minutes."
+            )
         if MODEL is not None:
             st.warning(
                 "OpenRouter is unavailable. Retrying this report with Gemini."
@@ -2301,9 +2339,31 @@ with st.sidebar:
         )
         if selected_provider == "OpenRouter":
             openrouter_models = get_openrouter_free_model_options()
+            now = time.time()
+            quarantined_models = {
+                model_id: details
+                for model_id, details in st.session_state.openrouter_quarantined_models.items()
+                if float(details.get("until", 0)) > now
+            }
+            st.session_state.openrouter_quarantined_models = quarantined_models
+            openrouter_models = [
+                model for model in openrouter_models
+                if str(model["id"]) == OPENROUTER_FREE_ROUTER
+                or str(model["id"]) not in quarantined_models
+            ]
             models_by_id = {
                 str(model["id"]): model for model in openrouter_models
             }
+            current_model_id = st.session_state.get("openrouter_model")
+            if current_model_id not in models_by_id:
+                st.session_state.pop("openrouter_model", None)
+
+            model_notice = st.session_state.pop(
+                "openrouter_model_notice", None
+            )
+            if model_notice:
+                st.warning(model_notice)
+
             selected_model_id = st.selectbox(
                 "Choose a free model",
                 list(models_by_id),
@@ -2372,9 +2432,24 @@ with st.sidebar:
                     try:
                         selected_llm.test_connection()
                     except OpenRouterError as exc:
+                        if quarantine_openrouter_model(selected_llm, exc):
+                            st.session_state.openrouter_model_notice = (
+                                f"{selected_model['name']} failed its live test "
+                                "and was removed for 15 minutes. Select another "
+                                f"model. Details: {exc}"
+                            )
+                            st.rerun()
                         st.error(str(exc))
                     else:
                         st.success("OpenRouter and the selected model are working.")
+            if quarantined_models and st.button(
+                "Refresh unavailable models",
+                use_container_width=True,
+                key="refresh_openrouter_models",
+            ):
+                st.session_state.openrouter_quarantined_models = {}
+                get_openrouter_free_model_options.clear()
+                st.rerun()
         else:
             selected_llm = MODEL
             st.caption(GEMINI_MODEL_NAME)

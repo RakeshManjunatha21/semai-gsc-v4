@@ -26,6 +26,10 @@ class _GeneratedContent:
 class OpenRouterError(RuntimeError):
     """A safe error that can be shown directly in the application UI."""
 
+    def __init__(self, message: str, *, model_unavailable: bool = False):
+        super().__init__(message)
+        self.model_unavailable = model_unavailable
+
 
 class GeminiError(RuntimeError):
     """A safe Gemini error that can be shown directly in the UI."""
@@ -178,8 +182,10 @@ class OpenRouterModel:
             OPENROUTER_REQUEST_OUTPUT_TOKENS,
         )
         self.supports_reasoning = supports_reasoning
+        self.fallback_from_unavailable_model = False
 
     def generate_content(self, prompt: str) -> _GeneratedContent:
+        self.fallback_from_unavailable_model = False
         messages = [{"role": "user", "content": prompt}]
         text_parts = []
         for continuation in range(self.MAX_CONTINUATIONS + 1):
@@ -191,13 +197,15 @@ class OpenRouterModel:
             if not text:
                 raise OpenRouterError(
                     "The selected model used its output budget before producing "
-                    "report text. Choose another free model."
+                    "report text. Choose another free model.",
+                    model_unavailable=True,
                 )
             if continuation == self.MAX_CONTINUATIONS:
                 raise OpenRouterError(
                     "The selected model could not complete this report within "
                     "six responses. No partial report was shown. Try the "
-                    "automatic free router or a model with a larger output limit."
+                    "automatic free router or a model with a larger output limit.",
+                    model_unavailable=True,
                 )
             final_attempt = continuation == self.MAX_CONTINUATIONS - 1
             messages.extend([
@@ -311,6 +319,8 @@ class OpenRouterModel:
                 index + 1 < len(model_names)
                 and response.status_code in _TRANSIENT_STATUS_CODES | {404}
             )
+            if can_fallback and response.status_code == 404:
+                self.fallback_from_unavailable_model = True
             if not can_fallback:
                 break
 
@@ -333,7 +343,10 @@ class OpenRouterModel:
                 response.status_code,
                 f"OpenRouter request failed with status {response.status_code}.",
             )
-            raise OpenRouterError(message) from exc
+            raise OpenRouterError(
+                message,
+                model_unavailable=response.status_code == 404,
+            ) from exc
         try:
             payload = response.json()
             if payload.get("error"):
@@ -346,21 +359,25 @@ class OpenRouterModel:
         if not text:
             if choice.get("error"):
                 raise OpenRouterError(
-                    "The selected OpenRouter model failed. Choose another free model."
+                    "The selected OpenRouter model failed. Choose another free model.",
+                    model_unavailable=True,
                 )
             finish_reason = choice.get("finish_reason")
             if finish_reason == "length":
                 raise OpenRouterError(
                     "The selected model used its output budget before producing "
-                    "report text. Choose another free model."
+                    "report text. Choose another free model.",
+                    model_unavailable=True,
                 )
             if finish_reason == "content_filter":
                 raise OpenRouterError(
-                    "The selected model filtered the response. Choose another free model."
+                    "The selected model filtered the response. Choose another free model.",
+                    model_unavailable=True,
                 )
             raise OpenRouterError(
                 "The selected OpenRouter model returned no report text. "
-                "Choose another free model."
+                "Choose another free model.",
+                model_unavailable=True,
             )
         return text, choice.get("finish_reason")
 
