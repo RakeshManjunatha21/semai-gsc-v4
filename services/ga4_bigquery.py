@@ -591,5 +591,9 @@ def enrich_payload_with_bigquery(base_payload: dict, bigquery_payload: dict) -> 
         }
     )
     base_payload["bigquery_extraction"] = bigquery_metadata
-    base_payload["data_source"] = "GA4 Data API + BigQuery event export"
+    current_source = base_payload.get("data_source", "GA4 Data API")
+    if "BigQuery event export" not in current_source:
+      base_payload["data_source"] = (
+        f"{current_source} + BigQuery event export"
+      )
     return base_payload

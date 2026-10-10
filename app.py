@@ -2839,13 +2839,11 @@ if st.session_state.data_source == "GA":
                 f"{len(bq_counts)} datasets."
             )
         except BigQueryExportUnavailable as exc:
-            ga_payload["data_source"] = "GA4 Data API"
             ga_payload["bigquery_extraction"] = {
                 "status": "unavailable",
                 "message": str(exc),
             }
         except Exception as exc:
-            ga_payload["data_source"] = "GA4 Data API"
             ga_payload["bigquery_extraction"] = {
                 "status": "error",
                 "message": str(exc),
@@ -2965,6 +2963,8 @@ if st.session_state.data_source == "GA":
             container_key="ga4-report",
             skip_first_h1=True,
         )
+
+        render_ga4_source_data(ga_pay, "ga4_deep_audit")
 
         st.markdown("")
 

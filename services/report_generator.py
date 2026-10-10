@@ -15,6 +15,7 @@ import numpy as np
 import pandas as pd
 
 from config import MODEL
+from services.llm import GeminiError, GeminiModel, OpenRouterError, OpenRouterModel
 from prompts import (
     ACTION_REPORT_PROMPT,
     CLUSTER_AUDIT_PROMPT,
@@ -258,6 +259,38 @@ BEGIN COMPARISON REPORT:
                     continue
             cleaned.append(line)
         return "\n".join(cleaned).strip()
+
+    @staticmethod
+    def _ga4_report_is_complete(report: str) -> bool:
+        """Return whether the response contains the required report structure."""
+        normalized = report.lower()
+        required_sections = [
+            "executive summary",
+            "baseline metrics snapshot",
+            "ranked evidence-priority actions",
+            "compliance self-check",
+        ]
+        planning_phrases = [
+            "let me analyze",
+            "i need to generate",
+            "first, let me understand",
+        ]
+        return (
+            len(report) >= 2_000
+            and all(section in normalized for section in required_sections)
+            and not any(phrase in normalized[:1_000] for phrase in planning_phrases)
+        )
+
+    def _raise_incomplete_ga4_report(self) -> None:
+        message = (
+            "The AI provider returned an incomplete GA4 report after a "
+            "corrective retry. No partial report was shown."
+        )
+        if isinstance(self._model, OpenRouterModel):
+            raise OpenRouterError(message)
+        if isinstance(self._model, GeminiModel):
+            raise GeminiError(message)
+        raise RuntimeError(message)
 
     @staticmethod
     def _ga4_model_payload(payload: dict) -> dict:
@@ -584,8 +617,24 @@ may enrich it when populated. Funnel next actions are limited adjacent-action
 evidence and must not be described as a complete Path Exploration.
 
 START YOUR RESPONSE NOW:
+Output only the finished Markdown report. Do not output planning, chain of
+thought, a preamble, or statements such as "let me analyze." Begin with the
+report title and complete every required section before stopping.
 """
         report = self._generate_with_quota_retry(prompt_text)
+        if not self._ga4_report_is_complete(report):
+            correction_prompt = f"""
+{prompt_text}
+
+CRITICAL CORRECTION:
+Your prior response was incomplete or contained planning text. Regenerate the
+entire report now. Return only the final Markdown document, include Executive
+Summary, Baseline Metrics Snapshot, Ranked Evidence-Priority Actions, and
+Compliance Self-Check, and do not reveal internal reasoning.
+"""
+            report = self._generate_with_quota_retry(correction_prompt)
+        if not self._ga4_report_is_complete(report):
+            self._raise_incomplete_ga4_report()
         return self._clean_ga4_report(report)
 
     # -----------------------------------------------------------------
