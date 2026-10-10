@@ -116,6 +116,23 @@ def extract_payload(
             for r in rows
         ]
     )
+    query_totals = (
+        df.groupby("query", as_index=False)
+        .agg({"clicks": "sum", "impressions": "sum"})
+    )
+    weighted_query_position = (
+        (df["position"] * df["impressions"])
+        .groupby(df["query"])
+        .sum()
+    )
+    query_totals["ctr"] = (
+        query_totals["clicks"]
+        / query_totals["impressions"].replace(0, pd.NA)
+    ).fillna(0)
+    query_totals["position"] = (
+        query_totals["query"].map(weighted_query_position)
+        / query_totals["impressions"].replace(0, pd.NA)
+    ).fillna(0)
 
     return {
         "site_url": site_url,
@@ -127,12 +144,14 @@ def extract_payload(
             "avg_position": round(df["position"].mean(), 2),
         },
         "top_queries_by_impressions": (
-            df.sort_values("impressions", ascending=False)
-            .head(20)
+            query_totals.sort_values("impressions", ascending=False)
+            .head(100)
             .to_dict("records")
         ),
         "top_queries_by_clicks": (
-            df.sort_values("clicks", ascending=False).head(20).to_dict("records")
+            query_totals.sort_values("clicks", ascending=False)
+            .head(100)
+            .to_dict("records")
         ),
         "top_pages": (
             df.groupby("page")

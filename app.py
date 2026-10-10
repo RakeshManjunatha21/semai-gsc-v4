@@ -121,9 +121,19 @@ for key, default in _SESSION_DEFAULTS.items():
 def get_ga4_service_functions():
     """Import GA4 service helpers lazily to avoid startup-time hard failures."""
     try:
-        from services.ga4 import extract_ga4_payload, list_ga4_properties
+        from services.ga4 import (
+            add_required_data_coverage,
+            enrich_payload_with_gsc,
+            extract_ga4_payload,
+            list_ga4_properties,
+        )
 
-        return extract_ga4_payload, list_ga4_properties
+        return (
+            add_required_data_coverage,
+            enrich_payload_with_gsc,
+            extract_ga4_payload,
+            list_ga4_properties,
+        )
     except Exception as exc:
         raise RuntimeError(f"Unable to load GA4 service module: {exc}") from exc
 
@@ -486,13 +496,15 @@ def render_ga4_source_data(payload: dict, key_prefix: str):
             key=f"{key_prefix}_source_json_dl",
         )
 
-        tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+        tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
             "Summary",
             "Channels",
             "Top Pages",
             "Countries",
             "Page × Event",
             "Funnel Segments",
+            "Landing × Source",
+            "GSC Queries",
             "Raw JSON",
         ])
 
@@ -663,6 +675,28 @@ def render_ga4_source_data(payload: dict, key_prefix: str):
                 st.info("No funnel segment source rows available.")
 
         with tab7:
+            landing_source_df = pd.DataFrame(
+                datasets.get("landing_page_source_hostname", [])
+            )
+            if not landing_source_df.empty:
+                st.dataframe(
+                    landing_source_df, use_container_width=True, height=420
+                )
+            else:
+                st.info("No landing page/source/hostname rows available.")
+
+        with tab8:
+            gsc_queries_df = pd.DataFrame(
+                datasets.get("gsc_query_page", [])
+            )
+            if not gsc_queries_df.empty:
+                st.dataframe(
+                    gsc_queries_df, use_container_width=True, height=420
+                )
+            else:
+                st.info("No Search Console query rows available.")
+
+        with tab9:
             st.json(payload)
 
 
@@ -2546,7 +2580,12 @@ if st.session_state.data_source == "GA":
     st.markdown("### Google Analytics 4 Analysis")
 
     try:
-        extract_ga4_payload, list_ga4_properties = get_ga4_service_functions()
+        (
+            add_required_data_coverage,
+            enrich_payload_with_gsc,
+            extract_ga4_payload,
+            list_ga4_properties,
+        ) = get_ga4_service_functions()
     except RuntimeError as exc:
         st.error(str(exc))
         st.info(
@@ -2582,6 +2621,30 @@ if st.session_state.data_source == "GA":
         key="ga_property_selector",
     )
     ga_property_id = property_map.get(selected_ga_property)
+
+    try:
+        with st.spinner("Loading Search Console properties..."):
+            ga_gsc_properties = list_properties(creds)
+    except Exception:
+        ga_gsc_properties = []
+
+    selected_ga_gsc_property = None
+    if ga_gsc_properties:
+        selected_ga_gsc_property = st.selectbox(
+            "Choose the Search Console property for query data:",
+            ga_gsc_properties,
+            key="ga_gsc_property_selector",
+            help=(
+                "Queries and landing pages from this property are extracted "
+                "for the same date range and included in the report and raw "
+                "Excel download."
+            ),
+        )
+    else:
+        st.warning(
+            "No Search Console property is available. The GA4 report can run, "
+            "but it will not include organic search queries."
+        )
 
     include_ga_prior_period = st.toggle(
         "Include previous-period benchmark",
@@ -2646,6 +2709,47 @@ if st.session_state.data_source == "GA":
         if "error" in ga_payload:
             st.error(f"Error fetching GA4 data: {ga_payload.get('error')}")
             st.stop()
+
+        if selected_ga_gsc_property:
+            try:
+                with st.spinner(
+                    "Extracting Search Console queries for the same period..."
+                ):
+                    ga_gsc_payload = extract_payload(
+                        creds,
+                        selected_ga_gsc_property,
+                        ga_start_date,
+                        ga_end_date,
+                    )
+                if ga_gsc_payload.get("raw_query_page_data"):
+                    ga_payload = enrich_payload_with_gsc(
+                        ga_payload, ga_gsc_payload
+                    )
+                    ga_payload["gsc_extraction"] = {
+                        "status": "available",
+                        "site_url": selected_ga_gsc_property,
+                        "row_count": len(
+                            ga_gsc_payload["raw_query_page_data"]
+                        ),
+                    }
+                else:
+                    ga_payload["gsc_extraction"] = {
+                        "status": "available_no_rows",
+                        "site_url": selected_ga_gsc_property,
+                        "message": ga_gsc_payload.get(
+                            "note", "No Search Console rows were returned."
+                        ),
+                    }
+            except Exception as exc:
+                ga_payload["gsc_extraction"] = {
+                    "status": "error",
+                    "site_url": selected_ga_gsc_property,
+                    "message": str(exc),
+                }
+                st.warning(
+                    "Search Console query extraction failed. The report will "
+                    "continue with GA4 data only."
+                )
 
         if include_ga_prior_period:
             prior_end_date = ga_start_date - timedelta(days=1)
@@ -2746,6 +2850,24 @@ if st.session_state.data_source == "GA":
                 "status": "error",
                 "message": str(exc),
             }
+
+        ga_payload = add_required_data_coverage(ga_payload)
+        coverage = ga_payload["required_data_coverage"]
+        available_count = sum(
+            1 for item in coverage if item.get("available")
+        )
+        if available_count == len(coverage):
+            st.success("Required data coverage verified: 4 of 4 inputs available.")
+        else:
+            missing_requirements = ", ".join(
+                item["requirement"]
+                for item in coverage
+                if not item.get("available")
+            )
+            st.warning(
+                f"Required data coverage: {available_count} of 4 available. "
+                f"Missing: {missing_requirements}."
+            )
 
         # Check for empty GA4 data (all summary metrics are zero)
         ga_summary = ga_payload.get("summary_metrics", {})

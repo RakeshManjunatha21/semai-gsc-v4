@@ -7,6 +7,8 @@ No Streamlit dependency.
 
 from __future__ import annotations
 
+from datetime import date, timedelta
+
 from google.analytics.data_v1alpha import AlphaAnalyticsDataClient
 from google.analytics.data_v1alpha.types import (
     DateRange,
@@ -1167,3 +1169,93 @@ def extract_ga4_payload(
         )
     except Exception as exc:
         return {"error": str(exc), "note": "Failed to fetch GA4 data."}
+
+
+def enrich_payload_with_gsc(base_payload: dict, gsc_payload: dict) -> dict:
+    """Attach GSC query evidence and raw rows to a GA4 report payload."""
+    raw_rows = gsc_payload.get("raw_query_page_data", [])
+    base_payload.setdefault("datasets", {})["gsc_query_page"] = raw_rows
+    base_payload["gsc_search_console"] = {
+        "site_url": gsc_payload.get("site_url", ""),
+        "date_range": gsc_payload.get("date_range", {}),
+        "summary_metrics": gsc_payload.get("summary_metrics", {}),
+        "top_queries_by_impressions": gsc_payload.get(
+            "top_queries_by_impressions", []
+        ),
+        "top_queries_by_clicks": gsc_payload.get(
+            "top_queries_by_clicks", []
+        ),
+        "top_pages": gsc_payload.get("top_pages", []),
+    }
+
+    metadata = base_payload.setdefault("extraction_metadata", {})
+    metadata.setdefault("dataset_row_counts", {})["gsc_query_page"] = {
+        "api_row_count": len(raw_rows),
+        "extracted_row_count": len(raw_rows),
+        "complete": True,
+    }
+    metadata.setdefault("report_quality", {})["gsc_query_page"] = {
+        "source": "Google Search Console Search Analytics API",
+    }
+    current_source = base_payload.get("data_source", "GA4 Data API")
+    if "Google Search Console" not in current_source:
+        base_payload["data_source"] = (
+            f"{current_source} + Google Search Console"
+        )
+    return base_payload
+
+
+def add_required_data_coverage(payload: dict) -> dict:
+    """Record whether all required cross-source report inputs are present."""
+    datasets = payload.get("datasets", {})
+    landing_rows = datasets.get("landing_page_source_hostname", [])
+    gsc_rows = datasets.get("gsc_query_page", [])
+    hostnames = sorted({
+        str(row.get("hostName", "")).strip()
+        for row in landing_rows
+        if str(row.get("hostName", "")).strip()
+    })
+    date_range = payload.get("date_range", {})
+    try:
+        start = date.fromisoformat(str(date_range.get("start", "")))
+        end = date.fromisoformat(str(date_range.get("end", "")))
+        day_count = (end - start).days + 1
+        is_previous_30_days = (
+            start == date.today() - timedelta(days=30)
+            and end == date.today() - timedelta(days=1)
+        )
+    except ValueError:
+        day_count = 0
+        is_previous_30_days = False
+
+    payload["required_data_coverage"] = [
+        {
+            "requirement": "GA4 landing page by session source",
+            "available": bool(landing_rows),
+            "row_count": len(landing_rows),
+            "details": "landingPagePlusQueryString + sessionSource + sessionMedium",
+        },
+        {
+            "requirement": "Google Search Console queries",
+            "available": bool(gsc_rows),
+            "row_count": len(gsc_rows),
+            "details": payload.get("gsc_search_console", {}).get(
+                "site_url", ""
+            ),
+        },
+        {
+            "requirement": "GA4 hostname",
+            "available": bool(hostnames),
+            "row_count": len(hostnames),
+            "details": ", ".join(hostnames),
+        },
+        {
+            "requirement": "Previous 30 completed days",
+            "available": is_previous_30_days,
+            "row_count": day_count,
+            "details": (
+                f"{date_range.get('start', '')} to {date_range.get('end', '')}"
+            ),
+        },
+    ]
+    return payload

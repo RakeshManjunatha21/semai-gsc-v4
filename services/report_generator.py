@@ -279,6 +279,12 @@ BEGIN COMPARISON REPORT:
             "countries": "datasets.countries",
         }
         datasets = model_payload.get("datasets", {})
+        gsc_data = model_payload.get("gsc_search_console", {})
+        gsc_query_rows = datasets.get("gsc_query_page", [])
+        gsc_queries_present = bool(
+            gsc_data.get("top_queries_by_impressions")
+            or gsc_data.get("top_queries_by_clicks")
+        )
         prior_period = model_payload.get("prior_period", {})
         prior_summary = prior_period.get("summary_metrics", {})
         prior_period_present = bool(prior_summary) and any(
@@ -317,8 +323,14 @@ BEGIN COMPARISON REPORT:
             "configured_names", []
         )
         model_payload["analysis_scope"] = {
-            "type": "ga4_only",
-            "excluded_sources": ["Google Search Console"],
+            "type": (
+                "ga4_with_gsc_queries"
+                if gsc_queries_present else "ga4_only"
+            ),
+            "included_sources": [
+                "GA4",
+                *(["Google Search Console"] if gsc_queries_present else []),
+            ],
         }
         analysis_input_manifest = {
             "ga4_key_event_configuration": {
@@ -336,18 +348,16 @@ BEGIN COMPARISON REPORT:
                 "error": key_event_configuration.get("error"),
             },
             "input_1_gsc_queries": {
-                "present": False,
-                "extraction_status": "not_applicable",
-                "unavailable_reason": (
-                    "Google Search Console is outside this GA4-only report."
-                ),
+                "dataset": "gsc_search_console.top_queries_by_impressions",
+                "present": gsc_queries_present,
+                "site_url": gsc_data.get("site_url"),
+                "date_range": gsc_data.get("date_range"),
             },
             "input_2_gsc_landing_pages": {
-                "present": False,
-                "extraction_status": "not_applicable",
-                "unavailable_reason": (
-                    "Google Search Console is outside this GA4-only report."
-                ),
+                "dataset": "datasets.gsc_query_page",
+                "present": bool(gsc_query_rows),
+                "raw_row_count": len(gsc_query_rows),
+                "model_view": "gsc_search_console.top_pages",
             },
             "input_7_events_report": {
                 "dataset": "datasets.events",
@@ -476,7 +486,9 @@ BEGIN COMPARISON REPORT:
             or details.get("present", False)
         }
         model_payload["datasets"] = {
-            name: rows for name, rows in datasets.items() if rows
+            name: rows
+            for name, rows in datasets.items()
+            if rows and name != "gsc_query_page"
         }
         model_payload.pop("bigquery_extraction", None)
         model_payload.pop("prior_period_extraction", None)
@@ -526,6 +538,22 @@ BEGIN COMPARISON REPORT:
             Markdown report string.
         """
         model_payload = self._ga4_model_payload(payload)
+        gsc_included = (
+            model_payload.get("analysis_scope", {}).get("type")
+            == "ga4_with_gsc_queries"
+        )
+        scope_instructions = (
+            """INTEGRATED GA4 + GSC SCOPE:
+Use GA4 landing-page/source/medium/hostname evidence together with the supplied
+Google Search Console queries, landing pages, clicks, impressions, CTR, and
+position. Distinguish semai.ai from app.semai.ai using hostName. Base organic
+search findings only on supplied GSC evidence and do not imply user-level
+joining between GA4 and GSC."""
+            if gsc_included
+            else """GA4-ONLY SCOPE:
+This report must use GA4 and its linked BigQuery event export only. Do not
+create findings from Google Search Console or organic search-query metrics."""
+        )
         prompt_text = f"""
 {GA4_AUDIT_PROMPT}
 
@@ -541,13 +569,7 @@ Otherwise, generate all sections of the GA4 Deep Audit Report following the temp
 Include a country-wise performance analysis using datasets.countries, covering
 traffic, engagement, key events, and revenue without inventing unavailable values.
 
-GA4-ONLY SCOPE:
-This report must use GA4 and its linked BigQuery event export only. Do not
-request, analyze, recommend supplying, or create findings from Google Search
-Console. Omit inputs 1 and 2 from the input-validation table because they are
-outside this report's scope. Never label them Absent or Blocked. Omit
-branded/non-branded CTR, search-query clustering, ranking, and
-organic-impression conclusions.
+{scope_instructions}
 
 EVIDENCE-INCLUSION POLICY:
 Use only populated datasets and manifest entries supplied in this run. Omit

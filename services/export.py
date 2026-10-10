@@ -87,6 +87,9 @@ def create_ga4_excel_export(payload: dict) -> BytesIO:
         pd.DataFrame([overview]).to_excel(
             writer, sheet_name="Summary", index=False
         )
+        pd.DataFrame(payload.get("required_data_coverage", [])).to_excel(
+            writer, sheet_name="Required Data Coverage", index=False
+        )
 
         status_rows = []
         for dataset_name, counts in row_counts.items():
@@ -149,7 +152,7 @@ def create_ga4_excel_export(payload: dict) -> BytesIO:
 
         used_sheet_names = {
             "Summary", "Extraction Status", "Reconciliation",
-            "Key Event Config",
+            "Key Event Config", "Required Data Coverage",
         }
         for dataset_name, rows in payload.get("datasets", {}).items():
             dataframe = pd.DataFrame(rows)
