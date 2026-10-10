@@ -354,6 +354,22 @@ BEGIN COMPARISON REPORT:
                 "present": bool(datasets.get("events")),
                 "sequential": False,
             },
+            "landing_page_by_source_and_hostname": {
+                "dataset": "datasets.landing_page_source_hostname",
+                "present": bool(
+                    datasets.get("landing_page_source_hostname")
+                ),
+                "dimensions": [
+                    "landingPagePlusQueryString",
+                    "sessionSource",
+                    "sessionMedium",
+                    "hostName",
+                ],
+                "purpose": (
+                    "Separate semai.ai from app.semai.ai and evaluate each "
+                    "landing page by session source and medium."
+                ),
+            },
             "input_12_path_exploration_equivalent": {
                 "dataset": "datasets.bq_form_start_paths",
                 "present": bool(datasets.get("bq_form_start_paths")),

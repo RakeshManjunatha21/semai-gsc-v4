@@ -66,6 +66,17 @@ _REPORT_DEFINITIONS = {
             "screenPageViews", "eventCount", "keyEvents", "totalRevenue",
         ],
     },
+    "landing_page_source_hostname": {
+        "dimensions": [
+            "landingPagePlusQueryString", "sessionSource", "sessionMedium",
+            "hostName",
+        ],
+        "metrics": [
+            "sessions", "totalUsers", "newUsers", "engagedSessions",
+            "engagementRate", "bounceRate", "averageSessionDuration",
+            "screenPageViews", "eventCount", "keyEvents", "totalRevenue",
+        ],
+    },
     "pages_and_screens": {
         "dimensions": ["pagePath", "pageTitle"],
         "metrics": [

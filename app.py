@@ -2609,7 +2609,7 @@ if st.session_state.data_source == "GA":
     with col_date2:
         ga_end_date = st.date_input(
             "End Date",
-            value=date.today(),
+            value=date.today() - timedelta(days=1),
             max_value=date.today(),
             help="Select the end date for analysis",
             key="ga_end_date",
@@ -2672,6 +2672,7 @@ if st.session_state.data_source == "GA":
                         name: prior_datasets.get(name, [])
                         for name in [
                             "traffic_acquisition",
+                            "landing_page_source_hostname",
                             "user_acquisition",
                             "devices",
                             "countries",
@@ -2680,7 +2681,8 @@ if st.session_state.data_source == "GA":
                     },
                     "scope": (
                         "Equal-length benchmark covering summary, acquisition, "
-                        "device, country, and event metrics."
+                        "landing page/source/hostname, device, country, and "
+                        "event metrics."
                     ),
                 }
                 ga_payload["prior_period_extraction"] = {
@@ -3048,7 +3050,8 @@ else:
 
     with col_date2:
         end_date = st.date_input(
-            "End Date", value=date.today(), max_value=date.today(),
+            "End Date", value=date.today() - timedelta(days=1),
+            max_value=date.today(),
             help="Select the end date for analysis",
         )
 
