@@ -216,49 +216,8 @@ BEGIN COMPARISON REPORT:
 
     @staticmethod
     def _clean_ga4_report(report: str) -> str:
-        """Remove residual missing-evidence status rows and empty sections."""
-        unavailable_status = re.compile(
-            r"\b(blocked|not available|unavailable|absent|not applicable)\b",
-            re.IGNORECASE,
-        )
-        lines = [
-            line for line in report.splitlines()
-            if not unavailable_status.search(line)
-        ]
-        filtered_lines = []
-        index = 0
-        while index < len(lines):
-            if (
-                index + 1 < len(lines)
-                and lines[index].lstrip().startswith("|")
-                and re.match(r"^\s*\|?[\s:|-]+\|\s*$", lines[index + 1])
-            ):
-                table_end = index + 2
-                while (
-                    table_end < len(lines)
-                    and lines[table_end].lstrip().startswith("|")
-                ):
-                    table_end += 1
-                if table_end == index + 2:
-                    index = table_end
-                    continue
-            filtered_lines.append(lines[index])
-            index += 1
-        lines = filtered_lines
-        cleaned = []
-        for index, line in enumerate(lines):
-            if line.startswith("##"):
-                section_has_content = False
-                for candidate in lines[index + 1:]:
-                    if candidate.startswith("##"):
-                        break
-                    if candidate.strip():
-                        section_has_content = True
-                        break
-                if not section_has_content:
-                    continue
-            cleaned.append(line)
-        return "\n".join(cleaned).strip()
+        """Normalize outer whitespace without removing evidence disclosures."""
+        return report.strip()
 
     @staticmethod
     def _ga4_report_is_complete(report: str) -> bool:
